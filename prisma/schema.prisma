@@ -1,0 +1,212 @@
+// SkillSwap — campus skill-exchange platform
+// Credit rule: teaching 1 hour earns 1 credit; spending 1 credit buys 1 hour of learning.
+// A user's balance is never stored — it is always SUM over CreditTransaction, so the
+// ledger stays the single source of truth and can be audited or replayed.
+//
+// Naming note: the tutoring session is `SwapSession`, not `Session`, so it never reads
+// ambiguously next to a Supabase auth session.
+
+// Prisma 7: connection URLs live in `prisma.config.ts`, not here, and the client
+// reaches Postgres through the `pg` driver adapter wired up in `src/lib/prisma.ts`.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @db.Uuid // mirrors Supabase auth.users.id
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  bio       String?  @db.VarChar(280)
+  branch    String? // e.g. "CSE"
+  year      Int? // 1-5
+  phone     String? // builds a wa.me deep link; only revealed on an ACCEPTED swap
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills UserSkill[]
+
+  sessionsAsLearner SwapSession[] @relation("Learner")
+  sessionsAsTeacher SwapSession[] @relation("Teacher")
+
+  creditsIn  CreditTransaction[] @relation("CreditTo")
+  creditsOut CreditTransaction[] @relation("CreditFrom")
+
+  ratingsGiven    Rating[] @relation("RatingAuthor")
+  ratingsReceived Rating[] @relation("RatingSubject")
+
+  @@index([branch])
+}
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+model Skill {
+  id       String        @id @default(uuid()) @db.Uuid
+  name     String        @unique // "Video Editing"
+  slug     String        @unique // "video-editing"
+  category SkillCategory @default(OTHER)
+
+  userSkills UserSkill[]
+  sessions   SwapSession[]
+
+  @@index([category])
+}
+
+/// Carries both directions: kind=TEACH is "I can teach this", kind=LEARN is
+/// "I want to learn this". Query `user.skills` and filter on `kind`.
+model UserSkill {
+  id      String        @id @default(uuid()) @db.Uuid
+  userId  String        @db.Uuid
+  skillId String        @db.Uuid
+  kind    UserSkillKind
+  level   SkillLevel? // only meaningful when kind = TEACH
+  note    String?       @db.VarChar(200)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId, kind])
+  @@index([skillId, kind]) // drives "who teaches X?" discovery
+}
+
+// ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+model SwapSession {
+  id          String        @id @default(uuid()) @db.Uuid
+  skillId     String        @db.Uuid
+  learnerId   String        @db.Uuid
+  teacherId   String        @db.Uuid
+  status      SessionStatus @default(REQUESTED)
+  message     String?       @db.VarChar(500) // learner's opening request
+  scheduledAt DateTime?
+  durationMin Int           @default(60)
+  mode        SessionMode   @default(IN_PERSON)
+  location    String? // room / cafe, when IN_PERSON
+  meetLink    String? // Meet or Zoom URL, when ONLINE
+
+  // Completion is two-sided: the credit only moves once BOTH timestamps are set.
+  learnerConfirmedAt DateTime?
+  teacherConfirmedAt DateTime?
+  cancelledById      String?   @db.Uuid // plain field, no relation, to avoid a third User edge
+  cancelReason       String?   @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skill   Skill @relation(fields: [skillId], references: [id])
+  learner User  @relation("Learner", fields: [learnerId], references: [id])
+  teacher User  @relation("Teacher", fields: [teacherId], references: [id])
+
+  creditTransaction CreditTransaction?
+  ratings           Rating[]
+
+  @@index([teacherId, status])
+  @@index([learnerId, status])
+  @@index([scheduledAt])
+}
+
+// ---------------------------------------------------------------------------
+// Credit ledger
+// ---------------------------------------------------------------------------
+
+/// Append-only. Never UPDATE or DELETE a row here — correct a mistake by
+/// inserting a compensating ADJUSTMENT row so history stays intact.
+model CreditTransaction {
+  id        String       @id @default(uuid()) @db.Uuid
+  amount    Int // whole credits, always > 0; direction comes from fromUser -> toUser
+  reason    CreditReason
+  sessionId String?      @unique @db.Uuid // set for SESSION_COMPLETED; @unique makes double-payout impossible
+  note      String?      @db.VarChar(200)
+  createdAt DateTime     @default(now())
+
+  // A null fromUserId means the system minted the credit (the SIGNUP_BONUS).
+  fromUserId String? @db.Uuid
+  toUserId   String  @db.Uuid
+
+  fromUser User?        @relation("CreditFrom", fields: [fromUserId], references: [id])
+  toUser   User         @relation("CreditTo", fields: [toUserId], references: [id])
+  session  SwapSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([toUserId])
+  @@index([fromUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Ratings
+// ---------------------------------------------------------------------------
+
+model Rating {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @db.Uuid
+  authorId  String   @db.Uuid // who wrote it
+  subjectId String   @db.Uuid // who it is about
+  score     Int // 1..5 — also guarded by a CHECK constraint added in the migration
+  comment   String?  @db.VarChar(400)
+  createdAt DateTime @default(now())
+
+  session SwapSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  author  User        @relation("RatingAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject User        @relation("RatingSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, authorId]) // one rating per person per session
+  @@index([subjectId])
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserSkillKind {
+  TEACH
+  LEARN
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum SkillCategory {
+  PROGRAMMING
+  DESIGN
+  MEDIA
+  LANGUAGE
+  MUSIC
+  ACADEMIC
+  CAREER
+  LIFESTYLE
+  OTHER
+}
+
+enum SessionStatus {
+  REQUESTED // learner asked, teacher has not replied
+  ACCEPTED // teacher agreed, time is set
+  COMPLETED // both confirmed, credit has moved
+  CANCELLED
+  DECLINED // teacher said no
+}
+
+enum SessionMode {
+  IN_PERSON
+  ONLINE
+}
+
+enum CreditReason {
+  SIGNUP_BONUS
+  SESSION_COMPLETED
+  ADJUSTMENT
+}
