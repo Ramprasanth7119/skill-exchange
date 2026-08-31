@@ -16,12 +16,25 @@ const display = Bricolage_Grotesque({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   title: {
     default: 'SkillSwap — learn from your campus',
     template: '%s · SkillSwap',
   },
   description:
     'Learn any skill from a student on your campus. Teach an hour, earn a credit, spend it learning something new. No money — just time.',
+  openGraph: {
+    siteName: 'SkillSwap',
+    title: 'SkillSwap — learn from your campus',
+    description:
+      'Teach an hour, earn a credit, spend it learning anything. Peer learning with time as the only currency.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'SkillSwap — learn from your campus',
+    description: 'Teach an hour, earn a credit, spend it learning anything.',
+  },
 }
 
 export const viewport: Viewport = {

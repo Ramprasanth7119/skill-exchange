@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, type FormEvent } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowRight, LoaderCircle, MailCheck, ShieldCheck } from 'lucide-react'
 import { Logo } from '@/components/navigation/logo'
 import { Button } from '@/components/ui/button'
@@ -37,11 +37,25 @@ function GoogleMark() {
  * in the sent state plays the role of the email link and lands on onboarding;
  * Phase B swaps the fake send for supabase.auth.signInWithOtp with the same UI.
  */
+/** useSearchParams must sit under Suspense on a statically prerendered page. */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  )
+}
+
+function LoginPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { hydrated, onboarded, profile } = useDemo()
   const [email, setEmail] = useState('')
-  const [error, setError] = useState<string | undefined>()
+  const [error, setError] = useState<string | undefined>(() =>
+    searchParams.get('error') === 'oauth'
+      ? 'Google sign-in was interrupted — give it another go.'
+      : undefined,
+  )
   const [sent, setSent] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
 

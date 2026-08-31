@@ -109,6 +109,46 @@ export function LiveProvider({
     return () => window.clearInterval(interval)
   }, [refresh])
 
+  // Supabase Realtime: a new Notification row for this user means something
+  // just happened (request, acceptance, credit) — ring the bell immediately
+  // instead of waiting for the next poll. Requires the Notification table to
+  // be in the `supabase_realtime` publication (see SETUP.md); without that
+  // the subscription is simply silent and polling still covers everything.
+  const userId = state.profile?.id ?? null
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    let cleanup: (() => void) | undefined
+
+    void import('@/lib/supabase/client').then(({ createClient }) => {
+      if (!active) return
+      const supabase = createClient()
+      const channel = supabase
+        .channel(`notifications-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'Notification',
+            filter: `userId=eq.${userId}`,
+          },
+          (payload) => {
+            const row = payload.new as { title?: string; body?: string }
+            if (row.title) toast('info', row.title, row.body ?? '')
+            void refresh()
+          },
+        )
+        .subscribe()
+      cleanup = () => void supabase.removeChannel(channel)
+    })
+
+    return () => {
+      active = false
+      cleanup?.()
+    }
+  }, [userId, refresh, toast])
+
   const value = useMemo<AppStoreValue>(() => {
     const profile = state.profile ?? BLANK_PROFILE
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut, RotateCcw, Save, Star } from 'lucide-react'
+import { LogOut, RotateCcw, Save, Star, Trash2 } from 'lucide-react'
 import type { Profile, SkillLevel } from '@/lib/types'
 import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
@@ -301,6 +301,53 @@ function ProfileEditor({ profile }: { profile: Profile }) {
           )}
         </div>
       </div>
+
+      {/* Live mode only: the account is real, so deleting it must be possible. */}
+      {!isDemoMode() ? <DangerZone /> : null}
     </form>
+  )
+}
+
+function DangerZone() {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  return (
+    <div className="mt-8 rounded-card border border-danger/20 bg-danger-soft/40 p-5">
+      <h2 className="font-display text-sm font-bold text-danger">Danger zone</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        Deleting your account wipes your profile, skills and notifications.
+        Completed sessions stay in your partners&apos; history, anonymized.
+      </p>
+      <div className="mt-3">
+        {confirming ? (
+          <span className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-ink-soft">This cannot be undone.</span>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                const { deleteAccountAction } = await import('@/app/actions')
+                await deleteAccountAction() // redirects home on success
+                setBusy(false)
+              }}
+            >
+              {busy ? 'Deleting…' : 'Yes, delete my account'}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+              Keep my account
+            </Button>
+          </span>
+        ) : (
+          <Button type="button" variant="ghost" size="sm" className="text-danger! hover:text-danger!" onClick={() => setConfirming(true)}>
+            <Trash2 aria-hidden className="size-4" />
+            Delete account
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

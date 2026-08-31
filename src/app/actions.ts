@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser, isAllowedEmail, requireUser } from '@/lib/auth'
 import { getClientState, getPublicProfileData } from '@/lib/data'
 import { createClient } from '@/lib/supabase/server'
+import { sendEmail } from '@/lib/email'
 import { isSupabaseConfigured } from '@/lib/env'
 import { redirect } from 'next/navigation'
 import type { ActionResult, ClientState, PublicProfile } from '@/lib/types'
@@ -237,6 +238,13 @@ export async function requestSessionAction(
       href: `/sessions/${session.id}`,
     },
   })
+  await sendEmail(
+    offers.user.email,
+    `${user.name.split(' ')[0]} wants to learn ${offers.skill.name}`,
+    `<p><strong>${user.name}</strong> requested an hour of ${offers.skill.name}.</p>
+     ${data.message ? `<p>&ldquo;${data.message}&rdquo;</p>` : ''}
+     <p>Accept it to earn a credit.</p>`,
+  )
   return { ok: true, data: { sessionId: session.id } }
 }
 
@@ -260,7 +268,7 @@ export async function acceptSessionAction(
 
   const session = await prisma.swapSession.findUnique({
     where: { id: data.sessionId },
-    include: { skill: true },
+    include: { skill: true, learner: true },
   })
   if (!session || session.teacherId !== user.id) return fail('Not your request to accept.')
   if (session.status !== 'REQUESTED') return fail('This request has already been answered.')
@@ -284,6 +292,12 @@ export async function acceptSessionAction(
       href: `/sessions/${session.id}`,
     },
   })
+  await sendEmail(
+    session.learner.email,
+    `${user.name.split(' ')[0]} accepted your ${session.skill.name} session`,
+    `<p>You're on for <strong>${session.skill.name}</strong> with ${user.name}.</p>
+     <p>The time, place and contact details are waiting in your sessions.</p>`,
+  )
   return { ok: true, data: undefined }
 }
 
@@ -384,6 +398,11 @@ export async function confirmAttendanceAction(sessionId: string): Promise<Action
   } catch {
     return fail('This session has already been settled.')
   }
+  await sendEmail(
+    session.teacher.email,
+    `+1 credit — you taught ${session.skill.name}`,
+    `<p>${session.learner.name.split(' ')[0]} confirmed the session. One credit is in your wallet.</p>`,
+  )
   return { ok: true, data: undefined }
 }
 
@@ -455,6 +474,50 @@ export async function markNotificationsReadAction(): Promise<ActionResult> {
 
 export async function signOutAction() {
   assertLive()
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  redirect('/')
+}
+
+/**
+ * Account deletion. The credit ledger is append-only and sessions are shared
+ * history with another student, so those rows stay — everything personal is
+ * wiped instead: identity fields anonymized, skills/favorites/notifications
+ * deleted. With a service-role key configured, the Supabase auth user is
+ * removed too; without one, sign-out still ends the session and the domain
+ * gate plus the anonymized email keep the row inert.
+ */
+export async function deleteAccountAction(): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+
+  await prisma.$transaction([
+    prisma.userSkill.deleteMany({ where: { userId: user.id } }),
+    prisma.favorite.deleteMany({ where: { OR: [{ userId: user.id }, { teacherId: user.id }] } }),
+    prisma.notification.deleteMany({ where: { userId: user.id } }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        name: 'Former student',
+        email: `deleted-${user.id}@removed.invalid`,
+        avatarUrl: null,
+        bio: null,
+        branch: null,
+        year: null,
+        phone: null,
+      },
+    }),
+  ])
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceKey) {
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+    const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+    await admin.auth.admin.deleteUser(user.id).catch(() => {
+      // The profile is already anonymized; auth cleanup can be re-run manually.
+    })
+  }
+
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/')

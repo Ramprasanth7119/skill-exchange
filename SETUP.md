@@ -64,12 +64,24 @@ npm run dev
    and the Google OAuth client's authorized redirects.
 5. Deploy. The build runs `prisma generate` on `postinstall` automatically.
 
+## 6. Optional power-ups (each ~5 min)
+
+**Email notifications** — new-request, accepted and credit-earned emails are
+already wired through `src/lib/email.ts`; they no-op until you set
+`RESEND_API_KEY` (free tier at https://resend.com) and `EMAIL_FROM`.
+
+**Instant notifications (Supabase Realtime)** — the bell already subscribes;
+enable the feed with: Database → Publications → `supabase_realtime` → add the
+`Notification` table (or run
+`alter publication supabase_realtime add table "Notification";`).
+Without it, the 20s poll still delivers everything.
+
+**Full account deletion** — set `SUPABASE_SERVICE_ROLE_KEY` (server-only!) so
+the "Delete account" button also removes the Supabase auth user, not just the
+anonymized profile.
+
 ## What is intentionally NOT built yet
 
-- **Email notifications** (the in-app bell works; emails bring people back).
-  Wire Resend inside the Server Actions that create `Notification` rows.
-- **Supabase Realtime** for instant updates — the client currently re-syncs
-  after every action and polls every 20s, which is plenty for a pilot.
 - **Adjustment/dispute tooling** — the ledger supports compensating
   `ADJUSTMENT` rows; writing them is a manual SQL job until an admin screen
   exists.
