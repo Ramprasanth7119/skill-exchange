@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarClock, Compass, UserRound, Wallet } from 'lucide-react'
+import { CalendarClock, Compass, Trophy, UserRound, Wallet } from 'lucide-react'
 import { Logo } from '@/components/navigation/logo'
+import { NotificationBell } from '@/components/navigation/notification-bell'
 import { Avatar } from '@/components/ui/avatar'
 import { CreditPill } from '@/components/ui/badge'
 import { useDemo } from '@/lib/store'
@@ -46,6 +47,7 @@ function LiveCreditPill({ credits }: { credits: number }) {
 const LINKS = [
   { href: '/discover', label: 'Discover', icon: Compass },
   { href: '/sessions', label: 'Sessions', icon: CalendarClock },
+  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/wallet', label: 'Wallet', icon: Wallet },
 ] as const
 
@@ -95,7 +97,8 @@ export function AppHeader() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          <NotificationBell />
           {hydrated ? (
             <Link href="/wallet" aria-label={`Wallet — ${profile.credits} credits`}>
               <LiveCreditPill credits={profile.credits} />
@@ -121,7 +124,11 @@ export function MobileTabBar() {
   const pathname = usePathname()
   const needsAction = useNeedsAction()
 
-  const tabs = [...LINKS, { href: '/profile', label: 'Profile', icon: UserRound } as const]
+  // "Leaderboard" doesn't fit an 11px tab — shorten it on mobile only.
+  const tabs = [
+    ...LINKS.map((l) => (l.href === '/leaderboard' ? { ...l, label: 'Ranks' } : l)),
+    { href: '/profile', label: 'Profile', icon: UserRound } as const,
+  ]
 
   return (
     <nav

@@ -44,6 +44,12 @@ export type TeacherCard = PersonSummary & {
   averageRating: number | null
   ratingCount: number
   sessionsTaught: number
+  /**
+   * What this teacher wants to learn in return. When it overlaps with the
+   * viewer's `teaches`, discovery surfaces a "perfect swap" — the feature that
+   * makes exchange platforms sticky: both sides earn while both sides learn.
+   */
+  lookingFor: SkillTag[]
 }
 
 /** The signed-in user's own profile. */
@@ -114,6 +120,18 @@ export type CreditEntry = {
   delta: number
   reason: 'SIGNUP_BONUS' | 'SESSION_COMPLETED' | 'ADJUSTMENT'
   description: string
+  createdAt: Date
+}
+
+/** An item in the in-app notification centre (the bell in the header). */
+export type AppNotification = {
+  id: string
+  kind: 'request' | 'accepted' | 'credit' | 'reminder'
+  title: string
+  body: string
+  /** Where tapping the notification should land. */
+  href: string
+  read: boolean
   createdAt: Date
 }
 

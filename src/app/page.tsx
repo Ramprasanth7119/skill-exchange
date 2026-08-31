@@ -2,11 +2,15 @@ import Link from 'next/link'
 import {
   ArrowDown,
   ArrowRight,
+  Award,
+  BellRing,
   CalendarCheck2,
   Coins,
   HandCoins,
+  Repeat,
   ShieldCheck,
   Sparkles,
+  Trophy,
   UsersRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,6 +21,29 @@ import { TeacherCard } from '@/components/discover/teacher-card'
 import { Reveal } from '@/components/effects/reveal'
 import { Tilt } from '@/components/effects/tilt'
 import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
+
+const HOOKS = [
+  {
+    icon: Repeat,
+    title: 'Perfect swaps',
+    body: 'We spot when a teacher wants exactly what you teach — one relationship, two credits.',
+  },
+  {
+    icon: Trophy,
+    title: 'Campus leaderboard',
+    body: 'Hours taught are public glory. Climb the semester board one session at a time.',
+  },
+  {
+    icon: Award,
+    title: 'Achievements',
+    body: 'First hour taught, full loop closed, five hours swapped — every milestone gets its badge.',
+  },
+  {
+    icon: BellRing,
+    title: 'Live from campus',
+    body: 'Requests, acceptances and credits land in your notification bell the moment they happen.',
+  },
+]
 
 const HOW_IT_WORKS = [
   {
@@ -126,6 +153,23 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ---- skill marquee ---- */}
+        {skills.length > 0 ? (
+          <div aria-hidden className="overflow-hidden border-y border-line bg-ink py-3.5">
+            <div className="marquee">
+              {[...skills, ...skills].map((skill, index) => (
+                <span
+                  key={`${skill.id}-${index}`}
+                  className="mx-2 inline-flex shrink-0 items-center gap-2 text-sm font-semibold whitespace-nowrap text-paper/80"
+                >
+                  <Sparkles className="size-3.5 text-star" />
+                  {skill.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* ---- the equation ---- */}
         <section className="border-y border-line bg-surface">
           <Reveal className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
@@ -170,6 +214,33 @@ export default function LandingPage() {
                     0{index + 1}
                   </span>
                 </div>
+                <h3 className="mt-4 font-display text-lg font-bold text-ink">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-soft">{body}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ---- the hooks ---- */}
+        <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+          <Reveal>
+            <h2 className="text-center font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+              Made to keep the loop spinning
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-center text-ink-soft">
+              Everything is designed so your first session is never your last.
+            </p>
+          </Reveal>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {HOOKS.map(({ icon: Icon, title, body }, index) => (
+              <Reveal
+                key={title}
+                delay={index * 100}
+                className="group rounded-card border border-line bg-surface p-6 transition-all duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-lg hover:shadow-ink/5"
+              >
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-credit-soft transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
+                  <Icon aria-hidden className="size-5 text-credit-strong" />
+                </span>
                 <h3 className="mt-4 font-display text-lg font-bold text-ink">{title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-soft">{body}</p>
               </Reveal>

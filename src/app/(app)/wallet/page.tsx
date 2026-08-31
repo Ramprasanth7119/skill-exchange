@@ -1,7 +1,8 @@
 'use client'
 
-import { Coins, GraduationCap, Info, Sparkles } from 'lucide-react'
+import { Coins, GraduationCap, Info, Lock, Sparkles } from 'lucide-react'
 import { useDemo } from '@/lib/store'
+import { getAchievements } from '@/lib/achievements'
 import { useCountUp } from '@/components/effects/use-count-up'
 import { formatDay, plural } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -15,8 +16,10 @@ const REASON_ICONS = {
 } as const
 
 export default function WalletPage() {
-  const { profile, ledger, hydrated } = useDemo()
+  const { profile, ledger, sessions, favorites, hydrated } = useDemo()
   const animatedCredits = useCountUp(profile.credits)
+  const achievements = getAchievements(profile, sessions, ledger, favorites)
+  const earnedCount = achievements.filter((a) => a.earned).length
 
   return (
     <div className="animate-fade-up mx-auto max-w-2xl">
@@ -61,6 +64,49 @@ export default function WalletPage() {
             Add a skill you teach
           </Button>
         </div>
+      ) : null}
+
+      {/* ---- achievements ---- */}
+      {hydrated ? (
+        <>
+          <div className="mt-8 flex items-baseline justify-between">
+            <h2 className="font-display text-lg font-bold text-ink">Achievements</h2>
+            <span className="text-xs font-semibold text-ink-faint">
+              {earnedCount}/{achievements.length} unlocked
+            </span>
+          </div>
+          <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {achievements.map(({ id, name, description, icon: Icon, earned }, index) => (
+              <li
+                key={id}
+                title={description}
+                className={`animate-fade-up flex flex-col items-center gap-2 rounded-card border p-4 text-center transition-transform duration-200 hover:-translate-y-0.5 ${
+                  earned
+                    ? 'border-credit/25 bg-surface shadow-sm'
+                    : 'border-dashed border-line bg-transparent opacity-60'
+                }`}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span
+                  className={`flex size-11 items-center justify-center rounded-full ${
+                    earned ? 'bg-credit-soft text-credit-strong' : 'bg-sunken text-ink-faint'
+                  }`}
+                >
+                  {earned ? (
+                    <Icon aria-hidden className="size-5" />
+                  ) : (
+                    <Lock aria-hidden className="size-4" />
+                  )}
+                </span>
+                <span className={`text-xs font-bold ${earned ? 'text-ink' : 'text-ink-faint'}`}>
+                  {name}
+                </span>
+                <span className="text-[11px] leading-snug text-ink-faint">{description}</span>
+                {earned ? <span className="sr-only">Unlocked</span> : <span className="sr-only">Locked</span>}
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
 
       {/* ---- ledger ---- */}

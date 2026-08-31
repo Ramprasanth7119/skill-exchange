@@ -21,6 +21,7 @@ import { CreditCost } from '@/components/ui/badge'
 import { SkillChip } from '@/components/ui/chip'
 import { EmptyState } from '@/components/ui/empty-state'
 import { RequestModal } from '@/components/sessions/request-modal'
+import { FavoriteButton } from '@/components/discover/teacher-card'
 
 const LEVEL_LABELS = {
   BEGINNER: 'Beginner-friendly',
@@ -54,7 +55,9 @@ export default function PublicProfilePage({
   // The swap hook: they teach something you want AND want something you teach.
   const teachesWhatYouWant = wantedByViewer.has(teacher.skill.id)
   const viewerTeachIds = new Set(profile.teaches.map(({ skill }) => skill.id))
-  const wantsWhatYouTeach = wants.some(({ skill }) => viewerTeachIds.has(skill.id))
+  const wantsWhatYouTeach = [...wants.map(({ skill }) => skill), ...teacher.lookingFor].some(
+    (skill) => viewerTeachIds.has(skill.id),
+  )
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl">
@@ -74,6 +77,7 @@ export default function PublicProfilePage({
             <h1 className="flex items-center justify-center gap-2 font-display text-2xl font-bold text-ink sm:justify-start">
               {teacher.name}
               <ShieldCheck aria-hidden className="size-5 shrink-0 text-primary" />
+              <FavoriteButton teacherId={teacher.id} name={teacher.name} />
             </h1>
             <p className="mt-0.5 text-ink-faint">
               {[teacher.branch, teacher.year ? `Year ${teacher.year}` : null]

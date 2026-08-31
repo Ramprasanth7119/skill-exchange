@@ -53,6 +53,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4.8,
     ratingCount: 12,
     sessionsTaught: 14,
+    lookingFor: [VIDEO, GUITAR],
   },
   {
     id: 'u-nithya',
@@ -67,6 +68,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4.5,
     ratingCount: 6,
     sessionsTaught: 7,
+    lookingFor: [DSA],
   },
   {
     // No ratings yet — the UI must show "New teacher", never "0.0 stars".
@@ -82,6 +84,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: null,
     ratingCount: 0,
     sessionsTaught: 0,
+    lookingFor: [PHOTO],
   },
   {
     id: 'u-shreya',
@@ -96,6 +99,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 5,
     ratingCount: 9,
     sessionsTaught: 11,
+    lookingFor: [DSA, ML],
   },
   {
     id: 'u-vikram',
@@ -110,6 +114,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4.2,
     ratingCount: 5,
     sessionsTaught: 6,
+    lookingFor: [ENGLISH],
   },
   {
     id: 'u-ananya',
@@ -124,6 +129,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4.6,
     ratingCount: 8,
     sessionsTaught: 9,
+    lookingFor: [SPEAKING],
   },
   {
     id: 'u-joel',
@@ -138,6 +144,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4,
     ratingCount: 2,
     sessionsTaught: 3,
+    lookingFor: [VIDEO],
   },
   {
     id: 'u-meera',
@@ -152,6 +159,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     averageRating: 4.9,
     ratingCount: 15,
     sessionsTaught: 18,
+    lookingFor: [UIUX],
   },
 ]
 

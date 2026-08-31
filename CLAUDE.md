@@ -54,6 +54,9 @@ avoidable error in this project.
   otherwise, so a production build serves no static data. The store's simulated
   event engine is gated the same way. Phase B replaces the accessor bodies with
   real queries.
+- **Achievements are derived, never stored** (`src/lib/achievements.ts`) —
+  same philosophy as the credit balance. Phase B computes the same list from
+  real rows; do not add an achievements table.
 - **Server Components fetch, Client Components interact.** Add `'use client'`
   only for a component that needs state, effects or event handlers.
 - **Mutations are Server Actions**, in `src/app/**/actions.ts`, validated with

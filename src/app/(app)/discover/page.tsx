@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useMemo, useState } from 'react'
-import { Search, SearchX, SlidersHorizontal } from 'lucide-react'
+import { Heart, Search, SearchX, SlidersHorizontal } from 'lucide-react'
 import type { SkillLevel } from '@/lib/types'
 import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
 import { useDemo } from '@/lib/store'
@@ -28,13 +28,14 @@ export default function DiscoverPage({
   searchParams: Promise<{ skill?: string }>
 }) {
   const { skill: initialSkill } = use(searchParams)
-  const { profile, hydrated } = useDemo()
+  const { profile, favorites, hydrated } = useDemo()
 
   const [query, setQuery] = useState('')
   const [skillSlug, setSkillSlug] = useState(initialSkill ?? '')
   const [level, setLevel] = useState<SkillLevel | ''>('')
   const [minRating, setMinRating] = useState('')
   const [sort, setSort] = useState<Sort>('recommended')
+  const [savedOnly, setSavedOnly] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   const wantedSkillIds = useMemo(
@@ -46,6 +47,7 @@ export default function DiscoverPage({
     const q = query.trim().toLowerCase()
 
     const filtered = getCampusTeachers().filter((t) => {
+      if (savedOnly && !favorites.includes(t.id)) return false
       if (skillSlug && t.skill.slug !== skillSlug) return false
       if (level && t.level !== level) return false
       if (minRating && (t.averageRating ?? 0) < Number(minRating)) return false
@@ -63,10 +65,11 @@ export default function DiscoverPage({
       if (aWanted !== bWanted) return bWanted - aWanted
       return (b.averageRating ?? 0) - (a.averageRating ?? 0)
     })
-  }, [query, skillSlug, level, minRating, sort, wantedSkillIds])
+  }, [query, skillSlug, level, minRating, sort, savedOnly, favorites, wantedSkillIds])
 
   const activeFilterCount = [level, minRating].filter(Boolean).length
-  const hasWants = wantedSkillIds.size > 0 && !query && !skillSlug && sort === 'recommended'
+  const hasWants =
+    wantedSkillIds.size > 0 && !query && !skillSlug && !savedOnly && sort === 'recommended'
 
   function resetAll() {
     setQuery('')
@@ -74,6 +77,7 @@ export default function DiscoverPage({
     setLevel('')
     setMinRating('')
     setSort('recommended')
+    setSavedOnly(false)
   }
 
   const filterControls = (
@@ -166,6 +170,20 @@ export default function DiscoverPage({
         >
           All skills
         </button>
+        {favorites.length > 0 ? (
+          <button
+            onClick={() => setSavedOnly((v) => !v)}
+            aria-pressed={savedOnly}
+            className={`flex shrink-0 items-center gap-1.5 rounded-chip px-4 py-2 text-sm font-semibold transition-colors ${
+              savedOnly
+                ? 'bg-danger text-white'
+                : 'border border-line bg-surface text-ink-soft hover:text-ink'
+            }`}
+          >
+            <Heart aria-hidden className={`size-3.5 ${savedOnly ? 'fill-current' : ''}`} />
+            Saved
+          </button>
+        ) : null}
         {getCampusSkills().map((skill) => (
           <button
             key={skill.id}

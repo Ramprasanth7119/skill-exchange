@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import type {
+  AppNotification,
   CreditEntry,
   PersonSummary,
   Profile,
@@ -51,6 +52,9 @@ type DemoState = {
   sessions: SessionSummary[]
   ledger: CreditEntry[]
   events: PendingEvent[]
+  /** Teacher ids the viewer has saved with the heart button. */
+  favorites: string[]
+  notifications: AppNotification[]
 }
 
 type RequestInput = {
@@ -86,6 +90,10 @@ type DemoContextValue = {
   profile: Profile
   sessions: SessionSummary[]
   ledger: CreditEntry[]
+  favorites: string[]
+  notifications: AppNotification[]
+  toggleFavorite: (teacherId: string) => void
+  markNotificationsRead: () => void
   requestSession: (input: RequestInput) => ActionOutcome
   cancelSession: (id: string) => void
   acceptSession: (id: string, input: AcceptInput) => void
@@ -132,6 +140,8 @@ const FRESH: DemoState = {
   sessions: [],
   ledger: [],
   events: [],
+  favorites: [],
+  notifications: [],
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
@@ -140,9 +150,11 @@ function load(): DemoState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw, (_key, value) =>
+    const parsed = JSON.parse(raw, (_key, value) =>
       typeof value === 'string' && ISO_DATE.test(value) ? new Date(value) : value,
     ) as DemoState
+    // Saves from before favorites/notifications existed lack those keys.
+    return { ...FRESH, ...parsed }
   } catch {
     return null
   }
@@ -206,6 +218,19 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const notify = useCallback(
+    (input: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => {
+      setState((current) => ({
+        ...current,
+        notifications: [
+          { ...input, id: eventId(), read: false, createdAt: new Date() },
+          ...current.notifications,
+        ].slice(0, 30),
+      }))
+    },
+    [],
+  )
+
   /** The one place a credit ever moves. Mirrors invariants 1-4 in CLAUDE.md. */
   const settleCompletion = useCallback(
     (sessionId: string) => {
@@ -251,11 +276,23 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
       if (session.role === 'teacher') {
         toast('credit', '+1 credit earned', `You taught ${session.skill.name} for an hour.`)
+        notify({
+          kind: 'credit',
+          title: '+1 credit earned',
+          body: `You taught ${session.skill.name} to ${session.counterpart.name.split(' ')[0]}.`,
+          href: '/wallet',
+        })
       } else {
         toast('credit', '1 credit spent', `An hour of ${session.skill.name} well spent.`)
+        notify({
+          kind: 'credit',
+          title: 'Session completed',
+          body: `1 credit went to ${session.counterpart.name.split(' ')[0]} — rate the session?`,
+          href: `/sessions/${sessionId}`,
+        })
       }
     },
-    [toast],
+    [toast, notify],
   )
 
   /* ------------------------------------------------------------------ */
@@ -296,6 +333,12 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           `${session.counterpart.name.split(' ')[0]} accepted your request!`,
           'The time and place are waiting in Sessions.',
         )
+        notify({
+          kind: 'accepted',
+          title: `${session.counterpart.name.split(' ')[0]} said yes!`,
+          body: `Your ${session.skill.name} session is on the calendar.`,
+          href: `/sessions/${session.id}`,
+        })
         return
       }
 
@@ -354,9 +397,15 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           `${requester.name.split(' ')[0]} wants to learn ${teachable.skill.name}`,
           'Accept it in Sessions to earn a credit.',
         )
+        notify({
+          kind: 'request',
+          title: `New request from ${requester.name.split(' ')[0]}`,
+          body: `They want to learn ${teachable.skill.name}. Accept to earn a credit.`,
+          href: `/sessions/${session.id}`,
+        })
       }
     },
-    [settleCompletion, toast],
+    [settleCompletion, toast, notify],
   )
 
   // The ticker: once a second, fire whatever has come due. Overdue events fire
@@ -508,6 +557,28 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, profile: { ...current.profile, ...patch } }))
   }, [])
 
+  const toggleFavorite = useCallback((teacherId: string) => {
+    setState((current) => ({
+      ...current,
+      favorites: current.favorites.includes(teacherId)
+        ? current.favorites.filter((id) => id !== teacherId)
+        : [...current.favorites, teacherId],
+    }))
+  }, [])
+
+  const markNotificationsRead = useCallback(() => {
+    setState((current) =>
+      current.notifications.some((n) => !n.read)
+        ? {
+            ...current,
+            notifications: current.notifications.map((n) =>
+              n.read ? n : { ...n, read: true },
+            ),
+          }
+        : current,
+    )
+  }, [])
+
   const completeOnboarding = useCallback((input: OnboardingInput) => {
     const teachesSomething = input.teaches.length > 0
     const now = Date.now()
@@ -532,6 +603,18 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           delta: 1,
           reason: 'SIGNUP_BONUS',
           description: 'Welcome credit — your first session is on us',
+          createdAt: new Date(),
+        },
+      ],
+      favorites: [],
+      notifications: [
+        {
+          id: eventId(),
+          kind: 'reminder',
+          title: `Welcome, ${input.name.split(' ')[0]}!`,
+          body: 'You start with 1 credit. Spend it learning, earn more by teaching.',
+          href: '/wallet',
+          read: false,
           createdAt: new Date(),
         },
       ],
@@ -572,6 +655,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       profile: state.profile,
       sessions: state.sessions,
       ledger: state.ledger,
+      favorites: state.favorites,
+      notifications: state.notifications,
+      toggleFavorite,
+      markNotificationsRead,
       requestSession,
       cancelSession,
       acceptSession,
@@ -585,6 +672,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     [
       hydrated,
       state,
+      toggleFavorite,
+      markNotificationsRead,
       requestSession,
       cancelSession,
       acceptSession,
