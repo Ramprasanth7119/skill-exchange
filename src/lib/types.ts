@@ -135,6 +135,23 @@ export type AppNotification = {
   createdAt: Date
 }
 
+/**
+ * Everything the client store needs, in one payload. Demo mode assembles it
+ * from fixtures; live mode loads it in `src/lib/data.ts` and refreshes it via
+ * a Server Action after every mutation.
+ */
+export type ClientState = {
+  /** null when signed out or not yet onboarded. */
+  profile: Profile | null
+  sessions: SessionSummary[]
+  ledger: CreditEntry[]
+  /** Teacher ids saved with the heart button. */
+  favorites: string[]
+  notifications: AppNotification[]
+  skills: SkillTag[]
+  teachers: TeacherCard[]
+}
+
 /** Standard result shape for every Server Action, so forms handle them uniformly. */
 export type ActionResult<T = void> =
   | { ok: true; data: T }

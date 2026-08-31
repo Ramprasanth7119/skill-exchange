@@ -21,7 +21,7 @@ import type {
   SkillTag,
   TeacherCard,
 } from '@/lib/types'
-import { getCampusTeachers } from '@/lib/campus'
+import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
 import { isDemoMode } from '@/lib/env'
 import { useToast } from '@/components/feedback/toast'
 
@@ -82,7 +82,7 @@ type OnboardingInput = {
 
 type ActionOutcome = { ok: true } | { ok: false; error: string }
 
-type DemoContextValue = {
+export type AppStoreValue = {
   /** False until localStorage has been consulted — render skeletons meanwhile. */
   hydrated: boolean
   /** False until onboarding finishes; the app shell redirects to /login. */
@@ -92,6 +92,10 @@ type DemoContextValue = {
   ledger: CreditEntry[]
   favorites: string[]
   notifications: AppNotification[]
+  /** The skill catalogue — fixtures in demo mode, DB rows in live mode. */
+  skills: SkillTag[]
+  /** Everyone currently teaching — same dual sourcing as `skills`. */
+  teachers: TeacherCard[]
   toggleFavorite: (teacherId: string) => void
   markNotificationsRead: () => void
   requestSession: (input: RequestInput) => ActionOutcome
@@ -102,14 +106,19 @@ type DemoContextValue = {
   rateSession: (id: string, score: number, comment: string) => void
   updateProfile: (patch: Partial<Profile>) => void
   completeOnboarding: (input: OnboardingInput) => void
+  /** Demo: wipe local state. Live: Supabase sign-out. */
   resetDemo: () => void
 }
 
-const DemoContext = createContext<DemoContextValue | null>(null)
+export type { AcceptInput, ActionOutcome, OnboardingInput, RequestInput }
+
+/** Provided by DemoProvider (fixtures) or LiveProvider (Supabase). */
+export const AppContext = createContext<AppStoreValue | null>(null)
+const DemoContext = AppContext
 
 export function useDemo() {
   const ctx = useContext(DemoContext)
-  if (!ctx) throw new Error('useDemo must be used inside <DemoProvider>')
+  if (!ctx) throw new Error('useDemo must be used inside a store provider')
   return ctx
 }
 
@@ -657,6 +666,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       ledger: state.ledger,
       favorites: state.favorites,
       notifications: state.notifications,
+      skills: getCampusSkills(),
+      teachers: getCampusTeachers(),
       toggleFavorite,
       markNotificationsRead,
       requestSession,

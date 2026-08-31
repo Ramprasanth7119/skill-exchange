@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useMemo, useState } from 'react'
+import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
@@ -12,7 +12,10 @@ import {
   ShieldCheck,
   Star,
 } from 'lucide-react'
-import { getCampusTeachers, getRichPublicProfile } from '@/lib/campus'
+import type { PublicProfile } from '@/lib/types'
+import { getRichPublicProfile } from '@/lib/campus'
+import { fetchPublicProfile } from '@/app/actions'
+import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
 import { formatDay, formatMonthYear, plural } from '@/lib/format'
 import { Avatar } from '@/components/ui/avatar'
@@ -35,12 +38,25 @@ export default function PublicProfilePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const { profile, hydrated } = useDemo()
+  const { profile, hydrated, teachers } = useDemo()
   const [requestOpen, setRequestOpen] = useState(false)
 
-  const teacher = getCampusTeachers().find((t) => t.id === id)
-  // Aditya has the fully-populated public profile fixture (reviews, wants).
-  const rich = getRichPublicProfile(id)
+  const teacher = teachers.find((t) => t.id === id)
+  // Demo: one rich fixture (Aditya). Live: reviews and wants load from the
+  // server just after the card paints from the teachers list.
+  const [rich, setRich] = useState<PublicProfile | null>(() =>
+    isDemoMode() ? getRichPublicProfile(id) : null,
+  )
+  useEffect(() => {
+    if (isDemoMode()) return
+    let cancelled = false
+    fetchPublicProfile(id).then((data) => {
+      if (!cancelled) setRich(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   const wantedByViewer = useMemo(
     () => new Set(profile.wants.map(({ skill }) => skill.id)),

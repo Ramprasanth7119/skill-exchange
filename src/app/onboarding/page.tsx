@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Coins, PartyPopper } from 'lucide-react'
 import type { SkillLevel } from '@/lib/types'
-import { getCampusSkills } from '@/lib/campus'
 import { useDemo } from '@/lib/store'
 import { useToast } from '@/components/feedback/toast'
 import { Logo } from '@/components/navigation/logo'
@@ -25,7 +24,7 @@ const STEPS = ['About you', 'What you teach', 'What you learn', 'Ready'] as cons
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { completeOnboarding } = useDemo()
+  const { completeOnboarding, skills } = useDemo()
   const toast = useToast()
 
   const [step, setStep] = useState(0)
@@ -37,7 +36,6 @@ export default function OnboardingPage() {
   const [want, setWant] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | undefined>()
 
-  const skills = useMemo(() => getCampusSkills(), [])
   const skillById = useMemo(() => new Map(skills.map((s) => [s.id, s])), [skills])
 
   function toggleTeach(id: string) {

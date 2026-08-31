@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ComponentProps, ReactNode } from 'react'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'credit'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'credit' | 'inverse'
 type Size = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<Variant, string> = {
@@ -13,6 +13,11 @@ const VARIANTS: Record<Variant, string> = {
   danger: 'bg-danger-soft text-danger hover:bg-danger hover:text-white active:scale-[0.98]',
   credit:
     'bg-credit-soft text-credit-strong border border-credit/20 hover:bg-credit hover:text-white active:scale-[0.98]',
+  // Light button for dark panels. A dedicated variant, NOT `primary` plus
+  // overrides: `text-ink` in className can lose the specificity race against
+  // the variant's `text-white`, which renders the label invisible.
+  inverse:
+    'bg-paper text-ink hover:bg-white hover:-translate-y-px hover:shadow-md hover:shadow-black/20 active:scale-[0.98] active:translate-y-0 shadow-sm',
 }
 
 const SIZES: Record<Size, string> = {

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Bricolage_Grotesque, Geist } from 'next/font/google'
 import { Providers } from '@/components/providers'
+import { isSupabaseConfigured } from '@/lib/env'
+import { getClientState } from '@/lib/data'
 import './globals.css'
 
 const body = Geist({
@@ -26,15 +28,19 @@ export const viewport: Viewport = {
   themeColor: '#faf7f2',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Live mode hydrates the client store from the real backend; demo mode
+  // passes null and the local demo store takes over.
+  const initial = isSupabaseConfigured() ? await getClientState() : null
+
   return (
     <html lang="en" className={`${body.variable} ${display.variable}`}>
       <body className="min-h-dvh antialiased">
-        <Providers>{children}</Providers>
+        <Providers initial={initial}>{children}</Providers>
       </body>
     </html>
   )

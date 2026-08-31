@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { Crown, Medal, TrendingUp, Trophy } from 'lucide-react'
-import { getCampusTeachers } from '@/lib/campus'
 import { useDemo } from '@/lib/store'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -25,9 +24,11 @@ const PODIUM_STYLES = [
 ]
 
 export default function LeaderboardPage() {
-  const { profile, hydrated } = useDemo()
+  const { profile, hydrated, teachers } = useDemo()
 
-  const ranked = [...getCampusTeachers()].sort(
+  // One row per person — a teacher offering three skills is still one teacher.
+  const byUser = new Map(teachers.map((t) => [t.id, t] as const))
+  const ranked = [...byUser.values()].sort(
     (a, b) => b.sessionsTaught - a.sessionsTaught || (b.averageRating ?? 0) - (a.averageRating ?? 0),
   )
   const podium = ranked.slice(0, 3)

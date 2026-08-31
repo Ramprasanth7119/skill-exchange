@@ -82,7 +82,9 @@ export function TeacherCard({ teacher }: { teacher: TeacherCardModel }) {
       className="group flex h-full flex-col rounded-card border border-line bg-surface p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-ink/5"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
+        {/* min-w-0 on every flex level, or the name's truncate can never
+            engage and long names push the card wider than the viewport */}
+        <div className="flex min-w-0 items-center gap-3">
           <Avatar
             name={teacher.name}
             size="lg"
@@ -90,7 +92,7 @@ export function TeacherCard({ teacher }: { teacher: TeacherCardModel }) {
           />
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 font-display font-bold text-ink">
-              <span className="truncate">{teacher.name}</span>
+              <span className="min-w-0 truncate">{teacher.name}</span>
               <ShieldCheck
                 aria-hidden
                 className="size-4 shrink-0 text-primary"
@@ -100,7 +102,7 @@ export function TeacherCard({ teacher }: { teacher: TeacherCardModel }) {
             {meta ? <p className="text-sm text-ink-faint">{meta}</p> : null}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <RatingDisplay average={teacher.averageRating} count={teacher.ratingCount} showCount={false} />
           <FavoriteButton teacherId={teacher.id} name={teacher.name} className="-mt-1.5 -mr-1.5" />
         </div>

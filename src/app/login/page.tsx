@@ -60,14 +60,35 @@ export default function LoginPage() {
     })
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     const trimmed = email.trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setError('That doesn’t look like an email address.')
       return
     }
+    if (isDemoMode()) {
+      setError(undefined)
+      setSent(true)
+      return
+    }
+    // The college-domain gate only means something once real auth exists.
+    const domain = process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN
+    if (domain && !trimmed.endsWith(`@${domain.toLowerCase()}`)) {
+      setError(`Use your @${domain} college address — that's the whole point.`)
+      return
+    }
     setError(undefined)
+    // Live mode: send the real magic link.
+    const { createClient } = await import('@/lib/supabase/client')
+    const { error: otpError } = await createClient().auth.signInWithOtp({
+      email: trimmed,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
+    })
+    if (otpError) {
+      setError('Could not send the link right now — try again in a minute.')
+      return
+    }
     setSent(true)
   }
 
@@ -92,17 +113,21 @@ export default function LoginPage() {
                 Open it on this device to continue.
               </p>
               <div className="mt-6 flex flex-col gap-2">
-                <Button href="/onboarding">
-                  Open the magic link
-                  <ArrowRight aria-hidden className="size-4" />
-                </Button>
+                {isDemoMode() ? (
+                  <Button href="/onboarding">
+                    Open the magic link
+                    <ArrowRight aria-hidden className="size-4" />
+                  </Button>
+                ) : null}
                 <Button variant="ghost" size="sm" onClick={() => setSent(false)}>
                   Use a different email
                 </Button>
               </div>
-              <p className="mt-4 rounded-xl bg-sunken px-3 py-2 text-xs text-ink-faint">
-                Demo preview — no email is actually sent yet.
-              </p>
+              {isDemoMode() ? (
+                <p className="mt-4 rounded-xl bg-sunken px-3 py-2 text-xs text-ink-faint">
+                  Demo preview — no email is actually sent yet.
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-card border border-line bg-surface p-8">

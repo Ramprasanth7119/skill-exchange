@@ -281,7 +281,7 @@ export default function SessionDetailPage({
               {firstName} is active — usually replies fast
             </p>
             <div className="mt-4">
-              <Button variant="ghost" size="sm" onClick={cancel} className="text-danger">
+              <Button variant="ghost" size="sm" onClick={cancel} className="text-danger! hover:text-danger!">
                 Cancel request
               </Button>
             </div>
@@ -369,7 +369,7 @@ export default function SessionDetailPage({
                 </p>
               ) : null}
               <div className="mt-3 text-center">
-                <Button variant="ghost" size="sm" onClick={cancel} className="text-danger">
+                <Button variant="ghost" size="sm" onClick={cancel} className="text-danger! hover:text-danger!">
                   Cancel session
                 </Button>
               </div>

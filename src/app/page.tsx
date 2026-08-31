@@ -21,6 +21,8 @@ import { TeacherCard } from '@/components/discover/teacher-card'
 import { Reveal } from '@/components/effects/reveal'
 import { Tilt } from '@/components/effects/tilt'
 import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
+import { getSkillCatalog, getTeachers } from '@/lib/data'
+import { isSupabaseConfigured } from '@/lib/env'
 
 const HOOKS = [
   {
@@ -63,10 +65,12 @@ const HOW_IT_WORKS = [
   },
 ]
 
-export default function LandingPage() {
-  const teachers = getCampusTeachers()
-  const skills = getCampusSkills()
-  const featured = [teachers[0], teachers[1], teachers[3]].filter(Boolean)
+export default async function LandingPage() {
+  // Live mode markets the real campus; demo mode shows the fixture roster.
+  const live = isSupabaseConfigured()
+  const teachers = live ? await getTeachers() : getCampusTeachers()
+  const skills = live ? await getSkillCatalog() : getCampusSkills()
+  const featured = [teachers[0], teachers[1], teachers[3] ?? teachers[2]].filter(Boolean)
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -87,7 +91,7 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* ---- hero ---- */}
-        <section className="relative mx-auto grid max-w-6xl items-center gap-12 overflow-x-clip px-4 pt-14 pb-20 sm:px-6 lg:grid-cols-2 lg:gap-8 lg:pt-20">
+        <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 overflow-x-clip px-4 pt-14 pb-20 sm:px-6 lg:grid-cols-2 lg:gap-8 lg:pt-20">
           {/* soft color washes behind the hero */}
           <div
             aria-hidden
@@ -199,7 +203,7 @@ export default function LandingPage() {
               How it works
             </h2>
           </Reveal>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
             {HOW_IT_WORKS.map(({ icon: Icon, title, body }, index) => (
               <Reveal
                 key={title}
@@ -231,7 +235,7 @@ export default function LandingPage() {
               Everything is designed so your first session is never your last.
             </p>
           </Reveal>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {HOOKS.map(({ icon: Icon, title, body }, index) => (
               <Reveal
                 key={title}
@@ -293,7 +297,7 @@ export default function LandingPage() {
             Regular students with something worth sharing — rated by the people
             they taught.
           </p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map((teacher, index) => (
               <Reveal key={teacher.id} delay={index * 120}>
                 <Tilt>
@@ -318,7 +322,7 @@ export default function LandingPage() {
               your first hour today.
             </p>
             <div className="mt-8 flex justify-center">
-              <Button size="lg" href="/login" className="bg-paper text-ink hover:bg-white">
+              <Button size="lg" variant="inverse" href="/login">
                 Get started — it&apos;s free
                 <ArrowRight aria-hidden className="size-4" />
               </Button>

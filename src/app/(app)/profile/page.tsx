@@ -2,9 +2,9 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { RotateCcw, Save, Star } from 'lucide-react'
+import { LogOut, RotateCcw, Save, Star } from 'lucide-react'
 import type { Profile, SkillLevel } from '@/lib/types'
-import { getCampusSkills } from '@/lib/campus'
+import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
 import { useToast } from '@/components/feedback/toast'
 import { formatMonthYear } from '@/lib/format'
@@ -37,7 +37,7 @@ export default function ProfilePage() {
 }
 
 function ProfileEditor({ profile }: { profile: Profile }) {
-  const { updateProfile, resetDemo } = useDemo()
+  const { updateProfile, resetDemo, skills } = useDemo()
   const toast = useToast()
   const router = useRouter()
 
@@ -54,7 +54,6 @@ function ProfileEditor({ profile }: { profile: Profile }) {
   )
   const [confirmReset, setConfirmReset] = useState(false)
 
-  const skills = useMemo(() => getCampusSkills(), [])
   const skillById = useMemo(() => new Map(skills.map((s) => [s.id, s])), [skills])
 
   function toggleTeach(id: string) {
@@ -267,7 +266,9 @@ function ProfileEditor({ profile }: { profile: Profile }) {
           </Button>
           {confirmReset ? (
             <span className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-ink-soft">Reset all demo data?</span>
+              <span className="font-medium text-ink-soft">
+                {isDemoMode() ? 'Reset all demo data?' : 'Sign out of SkillSwap?'}
+              </span>
               <Button
                 type="button"
                 variant="danger"
@@ -275,11 +276,14 @@ function ProfileEditor({ profile }: { profile: Profile }) {
                 onClick={() => {
                   resetDemo()
                   setConfirmReset(false)
-                  toast('info', 'Demo reset', 'Fresh start — join again from the landing page.')
-                  router.push('/')
+                  if (isDemoMode()) {
+                    toast('info', 'Demo reset', 'Fresh start — join again from the landing page.')
+                    router.push('/')
+                  }
+                  // Live mode: resetDemo runs the sign-out action, which redirects.
                 }}
               >
-                Yes, reset
+                {isDemoMode() ? 'Yes, reset' : 'Sign out'}
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmReset(false)}>
                 Keep
@@ -287,8 +291,12 @@ function ProfileEditor({ profile }: { profile: Profile }) {
             </span>
           ) : (
             <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmReset(true)}>
-              <RotateCcw aria-hidden className="size-4" />
-              Reset demo
+              {isDemoMode() ? (
+                <RotateCcw aria-hidden className="size-4" />
+              ) : (
+                <LogOut aria-hidden className="size-4" />
+              )}
+              {isDemoMode() ? 'Reset demo' : 'Sign out'}
             </Button>
           )}
         </div>

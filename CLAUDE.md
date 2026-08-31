@@ -57,6 +57,12 @@ avoidable error in this project.
 - **Achievements are derived, never stored** (`src/lib/achievements.ts`) —
   same philosophy as the credit balance. Phase B computes the same list from
   real rows; do not add an achievements table.
+- **One context, two providers.** Components consume `useDemo()` from
+  `store.tsx`; `providers.tsx` mounts `DemoProvider` (fixtures + simulated
+  events) or `LiveProvider` (`live-store.tsx`: optimistic patch → Server
+  Action → full re-sync via `refreshClientState`) depending on
+  `isSupabaseConfigured()`. Real loaders live in `src/lib/data.ts`, mutations
+  in `src/app/actions.ts`. See `SETUP.md` for the go-live runbook.
 - **Server Components fetch, Client Components interact.** Add `'use client'`
   only for a component that needs state, effects or event handlers.
 - **Mutations are Server Actions**, in `src/app/**/actions.ts`, validated with

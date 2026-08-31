@@ -3,7 +3,6 @@
 import { use, useMemo, useState } from 'react'
 import { Heart, Search, SearchX, SlidersHorizontal } from 'lucide-react'
 import type { SkillLevel } from '@/lib/types'
-import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
 import { useDemo } from '@/lib/store'
 import { TeacherCard } from '@/components/discover/teacher-card'
 import { Tilt } from '@/components/effects/tilt'
@@ -28,7 +27,7 @@ export default function DiscoverPage({
   searchParams: Promise<{ skill?: string }>
 }) {
   const { skill: initialSkill } = use(searchParams)
-  const { profile, favorites, hydrated } = useDemo()
+  const { profile, favorites, hydrated, skills, teachers } = useDemo()
 
   const [query, setQuery] = useState('')
   const [skillSlug, setSkillSlug] = useState(initialSkill ?? '')
@@ -46,7 +45,7 @@ export default function DiscoverPage({
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
 
-    const filtered = getCampusTeachers().filter((t) => {
+    const filtered = teachers.filter((t) => {
       if (savedOnly && !favorites.includes(t.id)) return false
       if (skillSlug && t.skill.slug !== skillSlug) return false
       if (level && t.level !== level) return false
@@ -65,7 +64,7 @@ export default function DiscoverPage({
       if (aWanted !== bWanted) return bWanted - aWanted
       return (b.averageRating ?? 0) - (a.averageRating ?? 0)
     })
-  }, [query, skillSlug, level, minRating, sort, savedOnly, favorites, wantedSkillIds])
+  }, [teachers, query, skillSlug, level, minRating, sort, savedOnly, favorites, wantedSkillIds])
 
   const activeFilterCount = [level, minRating].filter(Boolean).length
   const hasWants =
@@ -184,7 +183,7 @@ export default function DiscoverPage({
             Saved
           </button>
         ) : null}
-        {getCampusSkills().map((skill) => (
+        {skills.map((skill) => (
           <button
             key={skill.id}
             onClick={() => setSkillSlug(skillSlug === skill.slug ? '' : skill.slug)}
@@ -229,7 +228,7 @@ export default function DiscoverPage({
                 {results.length} teacher{results.length === 1 ? '' : 's'} found
               </p>
             )}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {results.map((teacher, index) => (
                 <div
                   key={`${teacher.id}-${teacher.skill.id}`}
