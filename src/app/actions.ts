@@ -462,6 +462,30 @@ export async function toggleFavoriteAction(teacherId: string): Promise<ActionRes
   return { ok: true, data: undefined }
 }
 
+/**
+ * The landing-wall shout-out. One row per user, upserted — editing your words
+ * replaces them, an empty message withdraws them. One-per-user is also the
+ * spam cap: nobody can flood the wall.
+ */
+export async function submitFeedbackAction(message: string): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+  const parsed = z.string().trim().max(280).safeParse(message)
+  if (!parsed.success) return fail('Keep it under 280 characters.')
+
+  if (parsed.data === '') {
+    await prisma.feedback.deleteMany({ where: { userId: user.id } })
+    return { ok: true, data: undefined }
+  }
+
+  await prisma.feedback.upsert({
+    where: { userId: user.id },
+    create: { userId: user.id, message: parsed.data },
+    update: { message: parsed.data, published: true },
+  })
+  return { ok: true, data: undefined }
+}
+
 export async function markNotificationsReadAction(): Promise<ActionResult> {
   assertLive()
   const user = await requireUser()

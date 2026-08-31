@@ -55,6 +55,8 @@ type DemoState = {
   /** Teacher ids the viewer has saved with the heart button. */
   favorites: string[]
   notifications: AppNotification[]
+  /** The viewer's landing-wall shout-out, if they left one. */
+  feedback: string | null
 }
 
 type RequestInput = {
@@ -96,6 +98,9 @@ export type AppStoreValue = {
   skills: SkillTag[]
   /** Everyone currently teaching — same dual sourcing as `skills`. */
   teachers: TeacherCard[]
+  /** The viewer's landing-wall shout-out. */
+  feedback: string | null
+  submitFeedback: (message: string) => void
   toggleFavorite: (teacherId: string) => void
   markNotificationsRead: () => void
   requestSession: (input: RequestInput) => ActionOutcome
@@ -151,6 +156,7 @@ const FRESH: DemoState = {
   events: [],
   favorites: [],
   notifications: [],
+  feedback: null,
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
@@ -566,6 +572,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, profile: { ...current.profile, ...patch } }))
   }, [])
 
+  const submitFeedback = useCallback((message: string) => {
+    setState((current) => ({ ...current, feedback: message.trim() || null }))
+  }, [])
+
   const toggleFavorite = useCallback((teacherId: string) => {
     setState((current) => ({
       ...current,
@@ -616,6 +626,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
         },
       ],
       favorites: [],
+      feedback: null,
       notifications: [
         {
           id: eventId(),
@@ -668,6 +679,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       notifications: state.notifications,
       skills: getCampusSkills(),
       teachers: getCampusTeachers(),
+      feedback: state.feedback,
+      submitFeedback,
       toggleFavorite,
       markNotificationsRead,
       requestSession,
@@ -683,6 +696,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     [
       hydrated,
       state,
+      submitFeedback,
       toggleFavorite,
       markNotificationsRead,
       requestSession,

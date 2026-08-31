@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut, RotateCcw, Save, Star, Trash2 } from 'lucide-react'
+import { LogOut, Megaphone, RotateCcw, Save, Star, Trash2 } from 'lucide-react'
 import type { Profile, SkillLevel } from '@/lib/types'
 import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
@@ -257,6 +257,9 @@ function ProfileEditor({ profile }: { profile: Profile }) {
         </div>
       </section>
 
+      {/* ---- your note on the landing wall ---- */}
+      <FeedbackCard />
+
       {/* ---- actions ---- */}
       <div className="sticky bottom-14 mt-6 rounded-card border border-line bg-surface/95 p-4 backdrop-blur-sm md:bottom-4">
         <div className="flex items-center justify-between gap-3">
@@ -305,6 +308,83 @@ function ProfileEditor({ profile }: { profile: Profile }) {
       {/* Live mode only: the account is real, so deleting it must be possible. */}
       {!isDemoMode() ? <DangerZone /> : null}
     </form>
+  )
+}
+
+/**
+ * "Hear it from campus": the wall on the landing page is written right here.
+ * One note per student, editable any time; clearing it withdraws the note.
+ */
+function FeedbackCard() {
+  const { feedback, submitFeedback } = useDemo()
+  const toast = useToast()
+  const [draft, setDraft] = useState(feedback ?? '')
+  const hasNote = Boolean(feedback)
+  const dirty = draft.trim() !== (feedback ?? '')
+
+  return (
+    <section className="mt-8 rounded-card border border-line bg-surface p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+            <Megaphone aria-hidden className="size-5 text-credit" />
+            Say it out loud
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            Loved (or endured) a session? Your note goes on the{' '}
+            <span className="font-semibold text-ink">landing page wall</span> with
+            your name — help the next student take the leap.
+          </p>
+        </div>
+        {hasNote ? (
+          <span className="shrink-0 rounded-chip bg-success-soft px-2.5 py-1 text-xs font-bold text-success">
+            On the wall
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-4">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          maxLength={280}
+          rows={3}
+          aria-label="Your note for the landing page wall"
+          placeholder="e.g. Traded an hour of DSA for an hour of Figma — best deal on campus."
+          className="w-full resize-none rounded-2xl border border-line-strong bg-surface px-4 py-3 text-sm text-ink placeholder:text-ink-faint transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+        />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-ink-faint tabular-nums">{draft.length}/280</span>
+          <span className="flex gap-2">
+            {hasNote ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDraft('')
+                  submitFeedback('')
+                  toast('info', 'Note removed', 'Your words are off the wall.')
+                }}
+              >
+                Take it down
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!dirty || draft.trim().length === 0}
+              onClick={() => {
+                submitFeedback(draft)
+                toast('success', hasNote ? 'Note updated' : 'You’re on the wall!', 'Thanks for the shout-out — it shows on the landing page.')
+              }}
+            >
+              {hasNote ? 'Update my note' : 'Put it on the wall'}
+            </Button>
+          </span>
+        </div>
+      </div>
+    </section>
   )
 }
 

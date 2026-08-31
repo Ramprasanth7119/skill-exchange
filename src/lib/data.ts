@@ -5,6 +5,7 @@ import type {
   AppNotification,
   ClientState,
   CreditEntry,
+  FeedbackNote,
   PersonSummary,
   Profile,
   PublicProfile,
@@ -186,6 +187,22 @@ async function getNotifications(userId: string): Promise<AppNotification[]> {
   }))
 }
 
+/** The landing-page shout-out wall: newest published voices, with authors. */
+export async function getFeedbackWall(limit = 6): Promise<FeedbackNote[]> {
+  const rows = await prisma.feedback.findMany({
+    where: { published: true, NOT: { user: { email: { endsWith: '@removed.invalid' } } } },
+    include: { user: true },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+  return rows.map((row) => ({
+    id: row.id,
+    message: row.message,
+    author: toPerson(row.user),
+    createdAt: row.createdAt,
+  }))
+}
+
 /**
  * The whole client payload in one call — what `LiveProvider` hydrates from and
  * refreshes with. Works signed-out too (public catalogue only), so the landing
@@ -197,17 +214,28 @@ export async function getClientState(): Promise<ClientState> {
   const [skills, teachers] = await Promise.all([getSkillCatalog(), getTeachers(user?.id)])
 
   if (!user) {
-    return { profile: null, sessions: [], ledger: [], favorites: [], notifications: [], skills, teachers }
+    return {
+      profile: null,
+      sessions: [],
+      ledger: [],
+      favorites: [],
+      notifications: [],
+      skills,
+      teachers,
+      feedback: null,
+    }
   }
 
-  const [sessionRows, ledger, notifications, favoriteRows, stats, learned] = await Promise.all([
-    findViewerSessions(user.id),
-    getLedger(user.id),
-    getNotifications(user.id),
-    prisma.favorite.findMany({ where: { userId: user.id }, select: { teacherId: true } }),
-    getTeacherStats([user.id]),
-    prisma.swapSession.count({ where: { learnerId: user.id, status: 'COMPLETED' } }),
-  ])
+  const [sessionRows, ledger, notifications, favoriteRows, stats, learned, ownFeedback] =
+    await Promise.all([
+      findViewerSessions(user.id),
+      getLedger(user.id),
+      getNotifications(user.id),
+      prisma.favorite.findMany({ where: { userId: user.id }, select: { teacherId: true } }),
+      getTeacherStats([user.id]),
+      prisma.swapSession.count({ where: { learnerId: user.id, status: 'COMPLETED' } }),
+      prisma.feedback.findUnique({ where: { userId: user.id }, select: { message: true } }),
+    ])
 
   const ratingStats = stats.ratings.get(user.id)
   const profile: Profile = {
@@ -237,6 +265,7 @@ export async function getClientState(): Promise<ClientState> {
     notifications,
     skills,
     teachers,
+    feedback: ownFeedback?.message ?? null,
   }
 }
 

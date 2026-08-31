@@ -47,8 +47,25 @@ model User {
   favorites   Favorite[]     @relation("FavoriteOwner")
   favoritedBy Favorite[]     @relation("FavoriteTarget")
   notifications Notification[]
+  feedback    Feedback?
 
   @@index([branch])
+}
+
+/// A student's public shout-out, shown on the landing page wall. One per
+/// user (editable), which caps spam by construction. `published` lets a
+/// moderator pull one without deleting the student's words.
+model Feedback {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  message   String   @db.VarChar(280)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([published, createdAt])
 }
 
 /// A teacher the user saved with the heart button.

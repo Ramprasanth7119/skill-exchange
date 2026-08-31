@@ -123,6 +123,14 @@ export type CreditEntry = {
   createdAt: Date
 }
 
+/** A student's public shout-out, shown on the landing page wall. */
+export type FeedbackNote = {
+  id: string
+  message: string
+  author: PersonSummary
+  createdAt: Date
+}
+
 /** An item in the in-app notification centre (the bell in the header). */
 export type AppNotification = {
   id: string
@@ -150,6 +158,8 @@ export type ClientState = {
   notifications: AppNotification[]
   skills: SkillTag[]
   teachers: TeacherCard[]
+  /** The viewer's own landing-wall shout-out, editable from /profile. */
+  feedback: string | null
 }
 
 /** Standard result shape for every Server Action, so forms handle them uniformly. */

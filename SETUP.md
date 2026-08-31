@@ -85,3 +85,6 @@ anonymized profile.
 - **Adjustment/dispute tooling** — the ledger supports compensating
   `ADJUSTMENT` rows; writing them is a manual SQL job until an admin screen
   exists.
+- **Feedback-wall moderation UI** — each student gets exactly one landing-wall
+  note (spam-capped by design). To pull one without deleting the student's
+  words: `update "Feedback" set published = false where id = '...';`

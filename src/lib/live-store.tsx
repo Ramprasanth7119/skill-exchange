@@ -18,6 +18,7 @@ import {
   declineSessionAction,
   markNotificationsReadAction,
   rateSessionAction,
+  submitFeedbackAction,
   refreshClientState,
   requestSessionAction,
   signOutAction,
@@ -221,6 +222,13 @@ export function LiveProvider({
       notifications: state.notifications,
       skills: state.skills,
       teachers: state.teachers,
+      feedback: state.feedback,
+
+      submitFeedback: (message) =>
+        run(
+          (current) => ({ ...current, feedback: message.trim() || null }),
+          () => submitFeedbackAction(message),
+        ),
 
       requestSession,
 

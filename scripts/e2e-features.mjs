@@ -124,6 +124,21 @@ try {
     'achievements shelf shows 2/8 unlocked (first steps + curator)',
     wallet.includes('2/8 unlocked'),
   )
+
+  // --- feedback: write a note in the profile, see it on the landing wall ---
+  await page.goto(`${BASE}/profile`, { waitUntil: 'networkidle2' })
+  await waitForText(page, 'Say it out loud')
+  const note = 'Swapped DSA for design in one afternoon. Unreal.'
+  await page.type('textarea[aria-label="Your note for the landing page wall"]', note)
+  await clickByText(page, 'button', 'Put it on the wall')
+  await waitForText(page, 'On the wall')
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2' })
+  await waitForText(page, 'Hear it from campus')
+  const landing = await page.evaluate(() => document.body.innerText)
+  record(
+    'own note appears on the landing wall',
+    landing.includes(note) && landing.includes('Feature Tester'),
+  )
 } catch (error) {
   record(`ABORTED: ${error.message}`, false)
 } finally {

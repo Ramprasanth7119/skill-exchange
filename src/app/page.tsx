@@ -20,8 +20,9 @@ import { CreditLoop } from '@/components/landing/credit-loop'
 import { TeacherCard } from '@/components/discover/teacher-card'
 import { Reveal } from '@/components/effects/reveal'
 import { Tilt } from '@/components/effects/tilt'
-import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
-import { getSkillCatalog, getTeachers } from '@/lib/data'
+import { VoiceWall } from '@/components/landing/voice-wall'
+import { getCampusSkills, getCampusTeachers, getCampusVoices } from '@/lib/campus'
+import { getFeedbackWall, getSkillCatalog, getTeachers } from '@/lib/data'
 import { isSupabaseConfigured } from '@/lib/env'
 
 const HOOKS = [
@@ -70,6 +71,7 @@ export default async function LandingPage() {
   const live = isSupabaseConfigured()
   const teachers = live ? await getTeachers() : getCampusTeachers()
   const skills = live ? await getSkillCatalog() : getCampusSkills()
+  const voices = live ? await getFeedbackWall() : getCampusVoices()
   const featured = [teachers[0], teachers[1], teachers[3] ?? teachers[2]].filter(Boolean)
 
   return (
@@ -308,6 +310,9 @@ export default async function LandingPage() {
           </div>
         </section>
         ) : null}
+
+        {/* ---- hear it from campus ---- */}
+        <VoiceWall voices={voices} />
 
         {/* ---- final CTA ---- */}
         <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">

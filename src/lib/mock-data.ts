@@ -1,5 +1,6 @@
 import type {
   CreditEntry,
+  FeedbackNote,
   Profile,
   PublicProfile,
   Review,
@@ -419,5 +420,30 @@ export const MOCK_CREDIT_HISTORY: CreditEntry[] = [
     reason: 'SIGNUP_BONUS',
     description: 'Welcome credit — your first session is on us',
     createdAt: new Date('2026-06-14T09:00:00Z'),
+  },
+]
+
+/** Landing-wall shout-outs from the demo roster. */
+export const MOCK_VOICES: FeedbackNote[] = [
+  {
+    id: 'v-1',
+    message:
+      'I traded one hour of DSA for an hour of Figma. Both of us walked away better — and it cost nothing.',
+    author: person(MOCK_TEACHERS[3]),
+    createdAt: new Date('2026-08-18T10:00:00Z'),
+  },
+  {
+    id: 'v-2',
+    message:
+      'Taught guitar chords on a Tuesday, learned video editing on a Thursday. This is how campus should work.',
+    author: person(MOCK_TEACHERS[2]),
+    createdAt: new Date('2026-08-21T15:30:00Z'),
+  },
+  {
+    id: 'v-3',
+    message:
+      'The teacher actually understood where I was stuck, because she sat in the same lecture hall last year.',
+    author: person(MOCK_TEACHERS[7]),
+    createdAt: new Date('2026-08-25T09:15:00Z'),
   },
 ]

@@ -1,5 +1,5 @@
-import type { PublicProfile, SkillTag, TeacherCard } from '@/lib/types'
-import { MOCK_PUBLIC_PROFILE, MOCK_SKILLS, MOCK_TEACHERS } from '@/lib/mock-data'
+import type { FeedbackNote, PublicProfile, SkillTag, TeacherCard } from '@/lib/types'
+import { MOCK_PUBLIC_PROFILE, MOCK_SKILLS, MOCK_TEACHERS, MOCK_VOICES } from '@/lib/mock-data'
 import { isDemoMode } from '@/lib/env'
 
 /**
@@ -15,6 +15,11 @@ export function getCampusTeachers(): TeacherCard[] {
 
 export function getCampusSkills(): SkillTag[] {
   return isDemoMode() ? MOCK_SKILLS : []
+}
+
+/** Landing-wall shout-outs — fixtures in demo mode, empty in production. */
+export function getCampusVoices(): FeedbackNote[] {
+  return isDemoMode() ? MOCK_VOICES : []
 }
 
 /** The fully-populated profile fixture (reviews, wants) — demo mode only. */
