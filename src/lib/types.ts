@@ -33,6 +33,45 @@ export type PersonSummary = {
   year: number | null
 }
 
+/**
+ * A recurring weekly window when someone is usually free. Advisory only: it
+ * seeds the time pickers on both sides so nobody has to guess, but it never
+ * blocks a booking — students' weeks change.
+ */
+export type AvailabilitySlot = {
+  id: string
+  /** 0 = Sunday … 6 = Saturday, matching Date#getDay. */
+  weekday: number
+  /** Minutes from midnight. */
+  startMin: number
+  endMin: number
+}
+
+/** One message in a session thread. */
+export type ChatMessage = {
+  id: string
+  body: string
+  /** True when the viewer wrote it — decides which side the bubble sits on. */
+  mine: boolean
+  senderName: string
+  createdAt: Date
+  /** Optimistic sends render dimmed until the server has them. */
+  pending?: boolean
+}
+
+/**
+ * A time one side has put forward, waiting on the other's yes. At most one is
+ * pending per session; `mine` says whether the viewer is waiting or deciding.
+ */
+export type TimeProposal = {
+  at: Date
+  mode: SessionMode
+  location: string | null
+  meetLink: string | null
+  note: string | null
+  mine: boolean
+}
+
 /** A teacher as shown on the Discover page. */
 export type TeacherCard = PersonSummary & {
   bio: string | null
@@ -50,6 +89,8 @@ export type TeacherCard = PersonSummary & {
    * makes exchange platforms sticky: both sides earn while both sides learn.
    */
   lookingFor: SkillTag[]
+  /** When they are usually free — shown before you pick a time to ask for. */
+  availability: AvailabilitySlot[]
 }
 
 /** The signed-in user's own profile. */
@@ -65,6 +106,7 @@ export type Profile = PersonSummary & {
   sessionsTaught: number
   sessionsLearned: number
   joinedAt: Date
+  availability: AvailabilitySlot[]
 }
 
 /** Someone else's public profile. */
@@ -110,6 +152,14 @@ export type SessionSummary = {
   counterpartConfirmed: boolean
   /** True once the viewer has left a rating for this session. */
   viewerRated: boolean
+  /** The session thread, oldest first. Chat opens the moment a request exists. */
+  messages: ChatMessage[]
+  /** Messages from the counterpart the viewer has not opened yet. */
+  unreadCount: number
+  /** A pending time change, from either side. */
+  proposal: TimeProposal | null
+  /** When the counterpart is usually free — seeds the time pickers. */
+  counterpartAvailability: AvailabilitySlot[]
   createdAt: Date
 }
 
@@ -134,7 +184,7 @@ export type FeedbackNote = {
 /** An item in the in-app notification centre (the bell in the header). */
 export type AppNotification = {
   id: string
-  kind: 'request' | 'accepted' | 'credit' | 'reminder'
+  kind: 'request' | 'accepted' | 'credit' | 'reminder' | 'message' | 'reschedule'
   title: string
   body: string
   /** Where tapping the notification should land. */

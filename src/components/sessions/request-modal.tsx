@@ -15,6 +15,8 @@ import { useToast } from '@/components/feedback/toast'
 import { Button } from '@/components/ui/button'
 import { CreditCost } from '@/components/ui/badge'
 import { Field, TextArea, TextInput } from '@/components/ui/field'
+import { SlotSuggestions } from '@/components/schedule/availability-hint'
+import { toLocalInputValue } from '@/lib/availability'
 import { Modal } from '@/components/ui/modal'
 import { SkillChip } from '@/components/ui/chip'
 import { formatSessionTime } from '@/lib/format'
@@ -204,6 +206,13 @@ export function RequestModal({
                     : "What you want to cover, and where you're starting from."}
                 </p>
               </div>
+              {teacher.availability.length > 0 ? (
+                <SlotSuggestions
+                  slots={teacher.availability}
+                  name={firstName}
+                  onPick={(date) => setPreferred(toLocalInputValue(date))}
+                />
+              ) : null}
               <Field label="Preferred time" hint="Optional — you'll agree on the final time together.">
                 {(id, describedBy) => (
                   <TextInput

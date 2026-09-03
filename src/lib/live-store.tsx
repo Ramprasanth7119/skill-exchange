@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ClientState, Profile } from '@/lib/types'
+import type { ChatMessage, ClientState, Profile } from '@/lib/types'
 import {
   AppContext,
   type AcceptInput,
   type ActionOutcome,
   type AppStoreValue,
   type OnboardingInput,
+  type ProposeInput,
   type RequestInput,
 } from '@/lib/store'
 import {
@@ -16,8 +17,12 @@ import {
   completeOnboardingAction,
   confirmAttendanceAction,
   declineSessionAction,
+  markMessagesReadAction,
   markNotificationsReadAction,
+  proposeTimeAction,
   rateSessionAction,
+  respondToProposalAction,
+  sendMessageAction,
   submitFeedbackAction,
   refreshClientState,
   requestSessionAction,
@@ -54,6 +59,7 @@ const BLANK_PROFILE: Profile = {
   sessionsTaught: 0,
   sessionsLearned: 0,
   joinedAt: new Date(0),
+  availability: [],
 }
 
 const POLL_MS = 20_000
@@ -195,6 +201,10 @@ export function LiveProvider({
               viewerConfirmed: false,
               counterpartConfirmed: false,
               viewerRated: false,
+              messages: [],
+              unreadCount: 0,
+              proposal: null,
+              counterpartAvailability: input.teacher.availability,
               createdAt: new Date(),
             },
             ...current.sessions,
@@ -265,6 +275,65 @@ export function LiveProvider({
           rateSessionAction({ sessionId: id, score, comment }),
         ),
 
+      sendMessage: (sessionId, body) => {
+        const text = body.trim()
+        if (!text) return
+        // Shown immediately and dimmed; the re-sync replaces it with the row
+        // the server actually stored, id and timestamp included.
+        const optimistic: ChatMessage = {
+          id: `optimistic-${Date.now()}`,
+          body: text,
+          mine: true,
+          senderName: profile.name,
+          createdAt: new Date(),
+          pending: true,
+        }
+        run(
+          (current) => ({
+            ...current,
+            sessions: current.sessions.map((s) =>
+              s.id === sessionId ? { ...s, messages: [...s.messages, optimistic] } : s,
+            ),
+          }),
+          () => sendMessageAction({ sessionId, body: text }),
+        )
+      },
+
+      markMessagesRead: (sessionId) => {
+        const target = state.sessions.find((s) => s.id === sessionId)
+        // Guarding here rather than in the caller keeps the read effect from
+        // firing a write on every render of an already-read thread.
+        if (!target || target.unreadCount === 0) return
+        run(patchSession(sessionId, { unreadCount: 0 }), () =>
+          markMessagesReadAction(sessionId),
+        )
+      },
+
+      proposeTime: (sessionId, input: ProposeInput) =>
+        run(patchSession(sessionId, { proposal: { ...input, mine: true } }), () =>
+          proposeTimeAction({ sessionId, ...input }),
+        ),
+
+      respondToProposal: (sessionId, accept) => {
+        const target = state.sessions.find((s) => s.id === sessionId)
+        const proposal = target?.proposal
+        run(
+          patchSession(
+            sessionId,
+            accept && proposal
+              ? {
+                  proposal: null,
+                  scheduledAt: proposal.at,
+                  mode: proposal.mode,
+                  location: proposal.location,
+                  meetLink: proposal.meetLink,
+                }
+              : { proposal: null },
+          ),
+          () => respondToProposalAction(sessionId, accept),
+        )
+      },
+
       updateProfile: (patch) => {
         const merged = { ...profile, ...patch }
         run(
@@ -282,6 +351,11 @@ export function LiveProvider({
                 note,
               })),
               wants: merged.wants.map(({ skill }) => skill.id),
+              availability: merged.availability.map(({ weekday, startMin, endMin }) => ({
+                weekday,
+                startMin,
+                endMin,
+              })),
             }),
         )
       },

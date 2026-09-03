@@ -80,6 +80,21 @@ Without it, the 20s poll still delivers everything.
 the "Delete account" button also removes the Supabase auth user, not just the
 anonymized profile.
 
+**Day-before reminders** — set `CRON_SECRET` to any long random string and add
+it to Vercel's environment variables. `vercel.json` already schedules
+`/api/cron/reminders` for 09:00 UTC daily; Vercel sends the secret as
+`Authorization: Bearer …`. Without the variable the route refuses every
+request, so leaving it unset is fail-closed rather than an open mailer. Test it
+locally with:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/reminders
+```
+
+Each session is stamped with `reminderSentAt` in the same pass, so a retried
+cron cannot mail anyone twice; accepting a rescheduled time clears the stamp so
+the new slot gets its own reminder.
+
 ## What is intentionally NOT built yet
 
 - **Adjustment/dispute tooling** — the ledger supports compensating
@@ -88,3 +103,9 @@ anonymized profile.
 - **Feedback-wall moderation UI** — each student gets exactly one landing-wall
   note (spam-capped by design). To pull one without deleting the student's
   words: `update "Feedback" set published = false where id = '...';`
+- **Message moderation / reporting** — threads are session-scoped, so the
+  practical block is declining a request, but there is no report button and no
+  admin view of a thread yet.
+- **No-show handling** — a session neither side confirms sits in `ACCEPTED`
+  forever. The reminder cron is the place to add an expiry sweep, and the
+  ledger's `ADJUSTMENT` reason is what a dispute would write.

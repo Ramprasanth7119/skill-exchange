@@ -48,6 +48,8 @@ model User {
   favoritedBy Favorite[]     @relation("FavoriteTarget")
   notifications Notification[]
   feedback    Feedback?
+  messages    Message[]      @relation("MessageSender")
+  availability Availability[]
 
   @@index([branch])
 }
@@ -155,6 +157,19 @@ model SwapSession {
   cancelledById      String?   @db.Uuid // plain field, no relation, to avoid a third User edge
   cancelReason       String?   @db.VarChar(300)
 
+  // A time one side has put forward, waiting on the other's yes. At most one
+  // is ever pending, so it lives in nullable columns rather than its own
+  // table; accepting copies `proposed*` onto the real fields and clears these.
+  proposedAt       DateTime?
+  proposedById     String?      @db.Uuid
+  proposedMode     SessionMode?
+  proposedLocation String?
+  proposedMeetLink String?
+  proposalNote     String?      @db.VarChar(200)
+
+  /// Set once the day-before reminder has gone out, so the cron never sends twice.
+  reminderSentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -164,6 +179,7 @@ model SwapSession {
 
   creditTransaction CreditTransaction?
   ratings           Rating[]
+  messages          Message[]
 
   @@index([teacherId, status])
   @@index([learnerId, status])
@@ -221,6 +237,43 @@ model Rating {
 // Enums
 // ---------------------------------------------------------------------------
 
+/// One chat message in a session thread. Conversation is scoped to a session
+/// on purpose: there are no open DMs on this platform, so nobody can be
+/// messaged by a stranger who has not asked to learn from them.
+model Message {
+  id        String    @id @default(uuid()) @db.Uuid
+  sessionId String    @db.Uuid
+  senderId  String    @db.Uuid
+  body      String    @db.VarChar(1000)
+  /// When the *other* participant read it. Null means unread for them.
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  session SwapSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender  User        @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([sessionId, senderId, readAt])
+}
+
+/// A recurring weekly window when someone is usually free. Purely advisory —
+/// it seeds the time pickers with slots that actually suit the other person
+/// instead of making both sides guess.
+model Availability {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @db.Uuid
+  /// 0 = Sunday … 6 = Saturday, matching JavaScript's Date#getDay.
+  weekday  Int
+  /// Minutes from midnight, local campus time.
+  startMin Int
+  endMin   Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekday, startMin])
+  @@index([userId])
+}
+
 enum UserSkillKind {
   TEACH
   LEARN
@@ -268,4 +321,6 @@ enum NotificationKind {
   ACCEPTED
   CREDIT
   REMINDER
+  MESSAGE
+  RESCHEDULE
 }

@@ -12,6 +12,7 @@ import {
 } from 'react'
 import type {
   AppNotification,
+  ChatMessage,
   CreditEntry,
   PersonSummary,
   Profile,
@@ -22,6 +23,7 @@ import type {
   TeacherCard,
 } from '@/lib/types'
 import { getCampusSkills, getCampusTeachers } from '@/lib/campus'
+import { formatSessionTime } from '@/lib/format'
 import { isDemoMode } from '@/lib/env'
 import { useToast } from '@/components/feedback/toast'
 
@@ -42,6 +44,8 @@ type PendingEvent =
   | { id: string; dueAt: number; type: 'TEACHER_ACCEPTS'; sessionId: string }
   | { id: string; dueAt: number; type: 'COUNTERPART_CONFIRMS'; sessionId: string }
   | { id: string; dueAt: number; type: 'INCOMING_REQUEST'; excludeIds: string[] }
+  | { id: string; dueAt: number; type: 'COUNTERPART_REPLIES'; sessionId: string }
+  | { id: string; dueAt: number; type: 'COUNTERPART_ANSWERS_PROPOSAL'; sessionId: string }
 
 /** Omit that distributes over a union instead of collapsing it. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -71,6 +75,14 @@ type AcceptInput = {
   mode: SessionMode
   location: string | null
   meetLink: string | null
+}
+
+type ProposeInput = {
+  at: Date
+  mode: SessionMode
+  location: string | null
+  meetLink: string | null
+  note: string | null
 }
 
 type OnboardingInput = {
@@ -109,13 +121,20 @@ export type AppStoreValue = {
   declineSession: (id: string) => void
   confirmAttendance: (id: string) => void
   rateSession: (id: string, score: number, comment: string) => void
+  /** Post to a session thread. Threads open the moment a request exists. */
+  sendMessage: (sessionId: string, body: string) => void
+  /** Clear the unread badge — called when the thread is on screen. */
+  markMessagesRead: (sessionId: string) => void
+  /** Put a time to the other side; they accept or decline it. */
+  proposeTime: (sessionId: string, input: ProposeInput) => void
+  respondToProposal: (sessionId: string, accept: boolean) => void
   updateProfile: (patch: Partial<Profile>) => void
   completeOnboarding: (input: OnboardingInput) => void
   /** Demo: wipe local state. Live: Supabase sign-out. */
   resetDemo: () => void
 }
 
-export type { AcceptInput, ActionOutcome, OnboardingInput, RequestInput }
+export type { AcceptInput, ActionOutcome, OnboardingInput, ProposeInput, RequestInput }
 
 /** Provided by DemoProvider (fixtures) or LiveProvider (Supabase). */
 export const AppContext = createContext<AppStoreValue | null>(null)
@@ -146,6 +165,7 @@ const BLANK_PROFILE: Profile = {
   sessionsTaught: 0,
   sessionsLearned: 0,
   joinedAt: new Date(0),
+  availability: [],
 }
 
 const FRESH: DemoState = {
@@ -186,6 +206,14 @@ function defaultSlot() {
   date.setHours(17, 30, 0, 0)
   return date
 }
+
+/** What the simulated counterpart writes back in a thread. */
+const COUNTERPART_LINES = [
+  'Sounds good! Anything you want me to prepare beforehand?',
+  'Works for me — bring your laptop and we can go through it live.',
+  'Perfect. I usually sit near the library entrance, easy to spot.',
+  'See you then! Ping me here if anything changes.',
+]
 
 const INCOMING_MESSAGES = [
   'Hey! Saw you teach %SKILL% — could you help me get started this week?',
@@ -245,6 +273,22 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
+
+  /** Push one message onto a thread; only the other side's mail is unread. */
+  const appendMessage = useCallback((sessionId: string, message: ChatMessage) => {
+    setState((current) => ({
+      ...current,
+      sessions: current.sessions.map((s) =>
+        s.id === sessionId
+          ? {
+              ...s,
+              messages: [...s.messages, message],
+              unreadCount: message.mine ? s.unreadCount : s.unreadCount + 1,
+            }
+          : s,
+      ),
+    }))
+  }, [])
 
   /** The one place a credit ever moves. Mirrors invariants 1-4 in CLAUDE.md. */
   const settleCompletion = useCallback(
@@ -362,6 +406,60 @@ export function DemoProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      if (event.type === 'COUNTERPART_REPLIES') {
+        const session = current.sessions.find((s) => s.id === event.sessionId)
+        // Terminal sessions are read-only history — nobody is listening.
+        if (!session || (session.status !== 'REQUESTED' && session.status !== 'ACCEPTED')) return
+        const firstName = session.counterpart.name.split(' ')[0]
+        const body = COUNTERPART_LINES[session.messages.length % COUNTERPART_LINES.length]
+        appendMessage(event.sessionId, {
+          id: eventId(),
+          body,
+          mine: false,
+          senderName: session.counterpart.name,
+          createdAt: new Date(),
+        })
+        toast('info', `${firstName} replied`, body)
+        notify({
+          kind: 'message',
+          title: `${firstName} replied`,
+          body,
+          href: `/sessions/${session.id}`,
+        })
+        return
+      }
+
+      if (event.type === 'COUNTERPART_ANSWERS_PROPOSAL') {
+        const session = current.sessions.find((s) => s.id === event.sessionId)
+        // Only a proposal the viewer made is waiting on the other side.
+        if (!session?.proposal?.mine) return
+        const { at } = session.proposal
+        setState((prev) => ({
+          ...prev,
+          sessions: prev.sessions.map((s) =>
+            s.id === event.sessionId && s.proposal
+              ? {
+                  ...s,
+                  scheduledAt: s.proposal.at,
+                  mode: s.proposal.mode,
+                  location: s.proposal.location,
+                  meetLink: s.proposal.meetLink,
+                  proposal: null,
+                }
+              : s,
+          ),
+        }))
+        const firstName = session.counterpart.name.split(' ')[0]
+        toast('success', `${firstName} agreed to the new time`, formatSessionTime(at))
+        notify({
+          kind: 'reschedule',
+          title: 'New time confirmed',
+          body: `${session.skill.name} with ${firstName} — ${formatSessionTime(at)}`,
+          href: `/sessions/${session.id}`,
+        })
+        return
+      }
+
       if (event.type === 'INCOMING_REQUEST') {
         const { profile } = current
         if (profile.teaches.length === 0) return
@@ -403,6 +501,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           viewerConfirmed: false,
           counterpartConfirmed: false,
           viewerRated: false,
+          messages: [],
+          unreadCount: 0,
+          proposal: null,
+          counterpartAvailability: requester.availability,
           createdAt: new Date(),
         }
 
@@ -420,7 +522,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
         })
       }
     },
-    [settleCompletion, toast, notify],
+    [settleCompletion, toast, notify, appendMessage],
   )
 
   // The ticker: once a second, fire whatever has come due. Overdue events fire
@@ -480,6 +582,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
         viewerConfirmed: false,
         counterpartConfirmed: false,
         viewerRated: false,
+        messages: [],
+        unreadCount: 0,
+        proposal: null,
+        counterpartAvailability: input.teacher.availability,
         createdAt: new Date(),
       }
 
@@ -565,6 +671,81 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       sessions: current.sessions.map((s) =>
         s.id === id ? { ...s, viewerRated: true } : s,
       ),
+    }))
+  }, [])
+
+  const sendMessage = useCallback(
+    (sessionId: string, body: string) => {
+      const text = body.trim()
+      if (!text) return
+      const session = stateRef.current.sessions.find((s) => s.id === sessionId)
+      if (!session) return
+
+      appendMessage(sessionId, {
+        id: eventId(),
+        body: text,
+        mine: true,
+        senderName: stateRef.current.profile.name || 'You',
+        createdAt: new Date(),
+      })
+      if (session.status === 'REQUESTED' || session.status === 'ACCEPTED') {
+        schedule({
+          dueAt: Date.now() + 4000 + Math.round(Math.random() * 4000),
+          type: 'COUNTERPART_REPLIES',
+          sessionId,
+        })
+      }
+    },
+    [appendMessage, schedule],
+  )
+
+  const markMessagesRead = useCallback((sessionId: string) => {
+    setState((current) => {
+      const target = current.sessions.find((s) => s.id === sessionId)
+      // Returning the same object when nothing is unread stops the effect that
+      // calls this from re-firing on its own state update.
+      if (!target || target.unreadCount === 0) return current
+      return {
+        ...current,
+        sessions: current.sessions.map((s) =>
+          s.id === sessionId ? { ...s, unreadCount: 0 } : s,
+        ),
+      }
+    })
+  }, [])
+
+  const proposeTime = useCallback(
+    (sessionId: string, input: ProposeInput) => {
+      setState((current) => ({
+        ...current,
+        sessions: current.sessions.map((s) =>
+          s.id === sessionId ? { ...s, proposal: { ...input, mine: true } } : s,
+        ),
+      }))
+      schedule({
+        dueAt: Date.now() + 5000 + Math.round(Math.random() * 4000),
+        type: 'COUNTERPART_ANSWERS_PROPOSAL',
+        sessionId,
+      })
+    },
+    [schedule],
+  )
+
+  const respondToProposal = useCallback((sessionId: string, accept: boolean) => {
+    setState((current) => ({
+      ...current,
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId || !s.proposal) return s
+        if (!accept) return { ...s, proposal: null }
+        return {
+          ...s,
+          scheduledAt: s.proposal.at,
+          mode: s.proposal.mode,
+          location: s.proposal.location,
+          meetLink: s.proposal.meetLink,
+          proposal: null,
+        }
+      }),
     }))
   }, [])
 
@@ -689,6 +870,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       declineSession,
       confirmAttendance,
       rateSession,
+      sendMessage,
+      markMessagesRead,
+      proposeTime,
+      respondToProposal,
       updateProfile,
       completeOnboarding,
       resetDemo,
@@ -705,6 +890,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       declineSession,
       confirmAttendance,
       rateSession,
+      sendMessage,
+      markMessagesRead,
+      proposeTime,
+      respondToProposal,
       updateProfile,
       completeOnboarding,
       resetDemo,

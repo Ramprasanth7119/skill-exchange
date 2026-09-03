@@ -2,7 +2,16 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Bell, BellRing, CalendarCheck, Coins, Inbox, Sparkles } from 'lucide-react'
+import {
+  Bell,
+  BellRing,
+  CalendarCheck,
+  CalendarSync,
+  Coins,
+  Inbox,
+  MessageSquare,
+  Sparkles,
+} from 'lucide-react'
 import type { AppNotification } from '@/lib/types'
 import { useDemo } from '@/lib/store'
 
@@ -11,6 +20,8 @@ const KIND_ICONS: Record<AppNotification['kind'], typeof Bell> = {
   accepted: CalendarCheck,
   credit: Coins,
   reminder: Sparkles,
+  message: MessageSquare,
+  reschedule: CalendarSync,
 }
 
 function timeAgo(date: Date) {

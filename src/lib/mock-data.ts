@@ -1,4 +1,5 @@
 import type {
+  AvailabilitySlot,
   CreditEntry,
   FeedbackNote,
   Profile,
@@ -40,6 +41,20 @@ export const MOCK_SKILLS: SkillTag[] = [
 
 const [DSA, VIDEO, UIUX, SPEAKING, GUITAR, ENGLISH, ML, PHOTO] = MOCK_SKILLS
 
+/** `free('u-aditya', [1, 3], 17, 20)` — Mon & Wed, 5-8pm. */
+const free = (
+  owner: string,
+  weekdays: number[],
+  startHour: number,
+  endHour: number,
+): AvailabilitySlot[] =>
+  weekdays.map((weekday) => ({
+    id: `av-${owner}-${weekday}-${startHour}`,
+    weekday,
+    startMin: startHour * 60,
+    endMin: endHour * 60,
+  }))
+
 export const MOCK_TEACHERS: TeacherCard[] = [
   {
     id: 'u-aditya',
@@ -55,6 +70,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 12,
     sessionsTaught: 14,
     lookingFor: [VIDEO, GUITAR],
+    availability: free('u-aditya', [1, 3, 5], 17, 20),
   },
   {
     id: 'u-nithya',
@@ -70,6 +86,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 6,
     sessionsTaught: 7,
     lookingFor: [DSA],
+    availability: free('u-nithya', [2, 4], 16, 19),
   },
   {
     // No ratings yet — the UI must show "New teacher", never "0.0 stars".
@@ -86,6 +103,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 0,
     sessionsTaught: 0,
     lookingFor: [PHOTO],
+    availability: free('u-t3', [0, 6], 10, 14),
   },
   {
     id: 'u-shreya',
@@ -101,6 +119,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 9,
     sessionsTaught: 11,
     lookingFor: [DSA, ML],
+    availability: free('u-t4', [1, 2, 3, 4, 5], 13, 14),
   },
   {
     id: 'u-vikram',
@@ -116,6 +135,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 5,
     sessionsTaught: 6,
     lookingFor: [ENGLISH],
+    availability: free('u-t5', [3, 5], 18, 21),
   },
   {
     id: 'u-ananya',
@@ -131,6 +151,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 8,
     sessionsTaught: 9,
     lookingFor: [SPEAKING],
+    availability: free('u-t6', [6], 9, 13),
   },
   {
     id: 'u-joel',
@@ -146,6 +167,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 2,
     sessionsTaught: 3,
     lookingFor: [VIDEO],
+    availability: free('u-t7', [2, 4], 17, 19),
   },
   {
     id: 'u-meera',
@@ -161,6 +183,7 @@ export const MOCK_TEACHERS: TeacherCard[] = [
     ratingCount: 15,
     sessionsTaught: 18,
     lookingFor: [UIUX],
+    availability: free('u-t8', [1, 4], 15, 18),
   },
 ]
 
@@ -185,6 +208,7 @@ export const MOCK_PROFILE: Profile = {
   sessionsTaught: 8,
   sessionsLearned: 5,
   joinedAt: new Date('2026-06-14T09:00:00Z'),
+  availability: free('u-me', [1, 3], 18, 21),
 }
 
 /** A brand-new account: the empty state every screen has to survive. */
@@ -201,6 +225,7 @@ export const MOCK_EMPTY_PROFILE: Profile = {
   sessionsTaught: 0,
   sessionsLearned: 0,
   joinedAt: new Date(),
+  availability: [],
 }
 
 export const MOCK_REVIEWS: Review[] = [
@@ -250,6 +275,7 @@ export const MOCK_PUBLIC_PROFILE: PublicProfile = {
   sessionsTaught: 14,
   sessionsLearned: 4,
   joinedAt: new Date('2026-02-02T09:00:00Z'),
+  availability: free('u-aditya', [1, 3, 5], 17, 20),
   recentReviews: MOCK_REVIEWS,
 }
 
@@ -262,7 +288,12 @@ const person = (t: TeacherCard) => ({
 })
 
 /** One session in every status, so no state is left unstyled. */
-export const MOCK_SESSIONS: SessionSummary[] = [
+type SessionSeed = Omit<
+  SessionSummary,
+  'messages' | 'unreadCount' | 'proposal' | 'counterpartAvailability'
+>
+
+const SESSION_SEEDS: SessionSeed[] = [
   {
     id: 's-1',
     status: 'REQUESTED',
@@ -391,6 +422,14 @@ export const MOCK_SESSIONS: SessionSummary[] = [
     createdAt: new Date('2026-08-02T19:00:00Z'),
   },
 ]
+
+export const MOCK_SESSIONS: SessionSummary[] = SESSION_SEEDS.map((seed) => ({
+  ...seed,
+  messages: [],
+  unreadCount: 0,
+  proposal: null,
+  counterpartAvailability: [],
+}))
 
 export const MOCK_CREDIT_HISTORY: CreditEntry[] = [
   {

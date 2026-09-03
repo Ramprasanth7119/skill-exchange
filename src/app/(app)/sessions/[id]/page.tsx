@@ -21,6 +21,14 @@ import { useDemo } from '@/lib/store'
 import { Confetti } from '@/components/effects/confetti'
 import { useToast } from '@/components/feedback/toast'
 import { formatSessionTime } from '@/lib/format'
+import { toLocalInputValue } from '@/lib/availability'
+import { SlotSuggestions } from '@/components/schedule/availability-hint'
+import { SessionChat } from '@/components/sessions/session-chat'
+import {
+  AddToCalendar,
+  ProposalBanner,
+  RescheduleCard,
+} from '@/components/sessions/schedule-panel'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/badge'
@@ -151,15 +159,20 @@ export default function SessionDetailPage({
       <div className="mt-4 rounded-card border border-line bg-surface p-6">
         <div className="flex items-center gap-4">
           <Avatar name={session.counterpart.name} size="lg" />
+          {/* The badge lives inside the text column and wraps below the title
+              rather than sitting beside it: as a sibling it squeezed the
+              heading to a word per line at phone width. */}
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-xl font-bold text-ink">
-              {session.role === 'teacher' ? 'Teaching' : 'Learning'} {session.skill.name}
-            </h1>
-            <p className="text-sm text-ink-soft">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h1 className="font-display text-xl font-bold text-ink">
+                {session.role === 'teacher' ? 'Teaching' : 'Learning'} {session.skill.name}
+              </h1>
+              <StatusBadge status={session.status} />
+            </div>
+            <p className="mt-0.5 text-sm text-ink-soft">
               {session.role === 'teacher' ? 'for' : 'with'} {session.counterpart.name}
             </p>
           </div>
-          <StatusBadge status={session.status} />
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4 text-xs font-medium text-ink-faint">
           <SkillChip name={session.skill.name} category={session.skill.category} />
@@ -189,15 +202,36 @@ export default function SessionDetailPage({
               Accept to lock in a time — you&apos;ll earn{' '}
               <strong className="text-credit-strong">+1 credit</strong> when the hour is done.
             </p>
+            {session.scheduledAt ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-chip bg-primary-faint px-3 py-1.5 text-xs font-bold text-primary">
+                <CalendarClock aria-hidden className="size-3.5" />
+                They asked for {formatSessionTime(session.scheduledAt)}
+              </p>
+            ) : null}
 
             <div className="mt-5 flex flex-col gap-4">
+              {session.counterpartAvailability.length > 0 ? (
+                <SlotSuggestions
+                  slots={session.counterpartAvailability}
+                  name={firstName}
+                  durationMin={session.durationMin}
+                  onPick={(date) => {
+                    setWhen(toLocalInputValue(date))
+                    setFormError(undefined)
+                  }}
+                />
+              ) : null}
+
               <Field label="When works for you?" error={formError}>
                 {(fieldId) => (
                   <TextInput
                     id={fieldId}
                     type="datetime-local"
                     value={when}
-                    onChange={(e) => setWhen(e.target.value)}
+                    onChange={(e) => {
+                      setWhen(e.target.value)
+                      setFormError(undefined)
+                    }}
                   />
                 )}
               </Field>
@@ -290,6 +324,8 @@ export default function SessionDetailPage({
 
         {session.status === 'ACCEPTED' ? (
           <div className="flex flex-col gap-4">
+            <ProposalBanner session={session} />
+
             {/* schedule card */}
             <div className="rounded-card border border-upcoming/20 bg-upcoming-soft/40 p-6">
               <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
@@ -322,6 +358,7 @@ export default function SessionDetailPage({
                   <Button
                     variant="secondary"
                     size="sm"
+                    external
                     href={`https://wa.me/${session.counterpartPhone.replace(/\D/g, '')}`}
                   >
                     <MessageCircle aria-hidden className="size-4" />
@@ -329,7 +366,14 @@ export default function SessionDetailPage({
                   </Button>
                 ) : null}
               </div>
+              <div className="mt-3 border-t border-upcoming/20 pt-3">
+                <AddToCalendar session={session} />
+              </div>
             </div>
+
+            {/* Only offered when no suggestion is already in flight — two
+                competing proposals is exactly the confusion this replaces. */}
+            {session.proposal === null ? <RescheduleCard session={session} /> : null}
 
             {/* completion */}
             <div className="rounded-card border border-line bg-surface p-6">
@@ -447,6 +491,10 @@ export default function SessionDetailPage({
             action={<Button href="/discover">Find another teacher</Button>}
           />
         ) : null}
+      </div>
+
+      <div className="mt-4">
+        <SessionChat session={session} />
       </div>
     </div>
   )

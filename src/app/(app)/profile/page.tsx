@@ -3,7 +3,9 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut, Megaphone, RotateCcw, Save, Star, Trash2 } from 'lucide-react'
-import type { Profile, SkillLevel } from '@/lib/types'
+import type { AvailabilitySlot, Profile, SkillLevel } from '@/lib/types'
+import { isSlotValid } from '@/lib/availability'
+import { AvailabilityEditor } from '@/components/schedule/availability-editor'
 import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
 import { useToast } from '@/components/feedback/toast'
@@ -52,6 +54,7 @@ function ProfileEditor({ profile }: { profile: Profile }) {
   const [want, setWant] = useState<Set<string>>(
     () => new Set(profile.wants.map(({ skill }) => skill.id)),
   )
+  const [availability, setAvailability] = useState<AvailabilitySlot[]>(profile.availability)
   const [confirmReset, setConfirmReset] = useState(false)
 
   const skillById = useMemo(() => new Map(skills.map((s) => [s.id, s])), [skills])
@@ -80,6 +83,10 @@ function ProfileEditor({ profile }: { profile: Profile }) {
       toast('error', 'Name is required')
       return
     }
+    if (availability.some((slot) => !isSlotValid(slot))) {
+      toast('error', 'Check your free windows', 'One of them ends before it starts.')
+      return
+    }
     updateProfile({
       name: name.trim(),
       branch: branch || null,
@@ -94,6 +101,7 @@ function ProfileEditor({ profile }: { profile: Profile }) {
         const skill = skillById.get(id)
         return skill ? [{ skill }] : []
       }),
+      availability,
     })
     toast('success', 'Profile saved', 'Your changes are live.')
   }
@@ -258,6 +266,8 @@ function ProfileEditor({ profile }: { profile: Profile }) {
       </section>
 
       {/* ---- your note on the landing wall ---- */}
+      <AvailabilityEditor value={availability} onChange={setAvailability} />
+
       <FeedbackCard />
 
       {/* ---- actions ---- */}

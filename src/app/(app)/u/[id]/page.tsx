@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   CalendarCheck2,
+  CalendarClock,
   GraduationCap,
   MessageSquareQuote,
   ShieldCheck,
@@ -18,6 +19,7 @@ import { fetchPublicProfile } from '@/app/actions'
 import { isDemoMode } from '@/lib/env'
 import { useDemo } from '@/lib/store'
 import { formatDay, formatMonthYear, plural } from '@/lib/format'
+import { formatSlot, sortSlots } from '@/lib/availability'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { CreditCost } from '@/components/ui/badge'
@@ -177,6 +179,23 @@ export default function PublicProfilePage({
           <p className="mt-3 text-sm leading-relaxed text-ink-soft">{teacher.note}</p>
         ) : null}
       </section>
+
+      {teacher.availability.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="font-display text-lg font-bold text-ink">Usually free</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sortSlots(teacher.availability).map((slot) => (
+              <span
+                key={slot.id}
+                className="inline-flex items-center gap-1.5 rounded-chip bg-sunken px-3 py-1.5 text-xs font-semibold text-ink-soft"
+              >
+                <CalendarClock aria-hidden className="size-3.5" />
+                {formatSlot(slot)}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {wants.length > 0 ? (
         <section className="mt-6">

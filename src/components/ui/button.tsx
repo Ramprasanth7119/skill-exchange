@@ -33,6 +33,8 @@ type ButtonProps = {
   variant?: Variant
   size?: Size
   href?: string
+  /** Set for links that leave the app — Google Calendar, a meeting URL. */
+  external?: boolean
   children: ReactNode
 } & Omit<ComponentProps<'button'>, 'children'>
 
@@ -40,6 +42,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   href,
+  external = false,
   className = '',
   children,
   ...rest
@@ -47,6 +50,13 @@ export function Button({
   const classes = `${BASE} ${VARIANTS[variant]} ${SIZES[size]} ${className}`
 
   if (href) {
+    if (external) {
+      return (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>
+          {children}
+        </a>
+      )
+    }
     return (
       <Link href={href} className={classes}>
         {children}

@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import type {
   AppNotification,
+  AvailabilitySlot,
+  ChatMessage,
   ClientState,
   CreditEntry,
   FeedbackNote,
@@ -45,6 +47,18 @@ const toPerson = (u: PersonRow): PersonSummary => ({
   branch: u.branch,
   year: u.year,
 })
+
+type AvailabilityRow = { id: string; weekday: number; startMin: number; endMin: number }
+
+const toSlot = (a: AvailabilityRow): AvailabilitySlot => ({
+  id: a.id,
+  weekday: a.weekday,
+  startMin: a.startMin,
+  endMin: a.endMin,
+})
+
+/** Weekday then start time — the order a human reads a week in. */
+const SLOT_ORDER = [{ weekday: 'asc' }, { startMin: 'asc' }] as const
 
 export async function getSkillCatalog(): Promise<SkillTag[]> {
   const skills = await prisma.skill.findMany({ orderBy: { name: 'asc' } })
@@ -91,7 +105,20 @@ export async function getTeachers(excludeUserId?: string | null): Promise<Teache
     orderBy: { user: { createdAt: 'asc' } },
   })
 
-  const { ratings, taught } = await getTeacherStats([...new Set(teachRows.map((r) => r.userId))])
+  const teacherIds = [...new Set(teachRows.map((r) => r.userId))]
+  const [{ ratings, taught }, slotRows] = await Promise.all([
+    getTeacherStats(teacherIds),
+    prisma.availability.findMany({
+      where: { userId: { in: teacherIds } },
+      orderBy: [...SLOT_ORDER],
+    }),
+  ])
+  const slotsByUser = new Map<string, AvailabilitySlot[]>()
+  for (const row of slotRows) {
+    const list = slotsByUser.get(row.userId) ?? []
+    list.push(toSlot(row))
+    slotsByUser.set(row.userId, list)
+  }
 
   return teachRows.map((row) => {
     const stats = ratings.get(row.userId)
@@ -105,6 +132,7 @@ export async function getTeachers(excludeUserId?: string | null): Promise<Teache
       ratingCount: stats?.count ?? 0,
       sessionsTaught: taught.get(row.userId) ?? 0,
       lookingFor: row.user.skills.map((s) => toSkillTag(s.skill)),
+      availability: slotsByUser.get(row.userId) ?? [],
     }
   })
 }
@@ -116,9 +144,16 @@ function findViewerSessions(userId: string) {
     where: { OR: [{ learnerId: userId }, { teacherId: userId }] },
     include: {
       skill: true,
-      learner: true,
-      teacher: true,
+      learner: { include: { availability: { orderBy: [...SLOT_ORDER] } } },
+      teacher: { include: { availability: { orderBy: [...SLOT_ORDER] } } },
       ratings: { where: { authorId: userId }, select: { id: true } },
+      // Newest 100, then reversed below: a `take` with ascending order would
+      // hand back the *oldest* 100 and truncate the live end of the thread.
+      messages: {
+        include: { sender: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -127,6 +162,15 @@ function findViewerSessions(userId: string) {
 function toSessionSummary(row: SessionRow, viewerId: string): SessionSummary {
   const isLearner = row.learnerId === viewerId
   const counterpart = isLearner ? row.teacher : row.learner
+
+  const messages: ChatMessage[] = [...row.messages].reverse().map((m) => ({
+    id: m.id,
+    body: m.body,
+    mine: m.senderId === viewerId,
+    senderName: m.sender.name,
+    createdAt: m.createdAt,
+  }))
+
   return {
     id: row.id,
     status: row.status,
@@ -144,6 +188,20 @@ function toSessionSummary(row: SessionRow, viewerId: string): SessionSummary {
     viewerConfirmed: Boolean(isLearner ? row.learnerConfirmedAt : row.teacherConfirmedAt),
     counterpartConfirmed: Boolean(isLearner ? row.teacherConfirmedAt : row.learnerConfirmedAt),
     viewerRated: row.ratings.length > 0,
+    messages,
+    unreadCount: row.messages.filter((m) => m.senderId !== viewerId && m.readAt === null).length,
+    proposal:
+      row.proposedAt && row.proposedById
+        ? {
+            at: row.proposedAt,
+            mode: row.proposedMode ?? row.mode,
+            location: row.proposedLocation,
+            meetLink: row.proposedMeetLink,
+            note: row.proposalNote,
+            mine: row.proposedById === viewerId,
+          }
+        : null,
+    counterpartAvailability: counterpart.availability.map(toSlot),
     createdAt: row.createdAt,
   }
 }
@@ -175,7 +233,14 @@ async function getNotifications(userId: string): Promise<AppNotification[]> {
     orderBy: { createdAt: 'desc' },
     take: 30,
   })
-  const kindMap = { REQUEST: 'request', ACCEPTED: 'accepted', CREDIT: 'credit', REMINDER: 'reminder' } as const
+  const kindMap = {
+    REQUEST: 'request',
+    ACCEPTED: 'accepted',
+    CREDIT: 'credit',
+    REMINDER: 'reminder',
+    MESSAGE: 'message',
+    RESCHEDULE: 'reschedule',
+  } as const
   return rows.map((row) => ({
     id: row.id,
     kind: kindMap[row.kind],
@@ -226,8 +291,16 @@ export async function getClientState(): Promise<ClientState> {
     }
   }
 
-  const [sessionRows, ledger, notifications, favoriteRows, stats, learned, ownFeedback] =
-    await Promise.all([
+  const [
+    sessionRows,
+    ledger,
+    notifications,
+    favoriteRows,
+    stats,
+    learned,
+    ownFeedback,
+    ownSlots,
+  ] = await Promise.all([
       findViewerSessions(user.id),
       getLedger(user.id),
       getNotifications(user.id),
@@ -235,6 +308,7 @@ export async function getClientState(): Promise<ClientState> {
       getTeacherStats([user.id]),
       prisma.swapSession.count({ where: { learnerId: user.id, status: 'COMPLETED' } }),
       prisma.feedback.findUnique({ where: { userId: user.id }, select: { message: true } }),
+      prisma.availability.findMany({ where: { userId: user.id }, orderBy: [...SLOT_ORDER] }),
     ])
 
   const ratingStats = stats.ratings.get(user.id)
@@ -255,6 +329,7 @@ export async function getClientState(): Promise<ClientState> {
     sessionsTaught: stats.taught.get(user.id) ?? 0,
     sessionsLearned: learned,
     joinedAt: user.createdAt,
+    availability: ownSlots.map(toSlot),
   }
 
   return {
@@ -273,7 +348,10 @@ export async function getClientState(): Promise<ClientState> {
 export async function getPublicProfileData(id: string): Promise<PublicProfile | null> {
   const user = await prisma.user.findUnique({
     where: { id },
-    include: { skills: { include: { skill: true } } },
+    include: {
+      skills: { include: { skill: true } },
+      availability: { orderBy: [...SLOT_ORDER] },
+    },
   })
   if (!user) return null
 
@@ -310,6 +388,7 @@ export async function getPublicProfileData(id: string): Promise<PublicProfile | 
     sessionsTaught: stats.taught.get(id) ?? 0,
     sessionsLearned: learned,
     joinedAt: user.createdAt,
+    availability: user.availability.map(toSlot),
     recentReviews,
   }
 }

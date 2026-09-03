@@ -135,6 +135,17 @@ const profileSchema = z.object({
     )
     .max(10),
   wants: z.array(z.string().uuid()).max(10),
+  availability: z
+    .array(
+      z
+        .object({
+          weekday: z.number().int().min(0).max(6),
+          startMin: z.number().int().min(0).max(24 * 60),
+          endMin: z.number().int().min(0).max(24 * 60),
+        })
+        .refine((slot) => slot.endMin > slot.startMin, 'A window has to end after it starts.'),
+    )
+    .max(21),
 })
 
 export async function updateProfileAction(
@@ -173,8 +184,25 @@ export async function updateProfileAction(
           .map((skillId) => ({ userId: user.id, skillId, kind: 'LEARN' as const })),
       ],
     })
+    // Availability is replaced wholesale for the same reason as skills: it is
+    // a description of this week, not history worth reconciling row by row.
+    await tx.availability.deleteMany({ where: { userId: user.id } })
+    await tx.availability.createMany({
+      data: dedupeSlots(data.availability).map((slot) => ({ userId: user.id, ...slot })),
+    })
   })
   return { ok: true, data: undefined }
+}
+
+/** The @@unique([userId, weekday, startMin]) makes a duplicate row throw. */
+function dedupeSlots<T extends { weekday: number; startMin: number }>(slots: T[]): T[] {
+  const seen = new Set<string>()
+  return slots.filter((slot) => {
+    const key = `${slot.weekday}-${slot.startMin}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /* ------------------------------------------------------------------ */
@@ -443,6 +471,199 @@ export async function rateSessionAction(input: z.infer<typeof rateSchema>): Prom
 }
 
 /* ------------------------------------------------------------------ */
+/* Messaging                                                           */
+/* ------------------------------------------------------------------ */
+
+/** Both participants of a session, or null when the viewer is not in it. */
+async function loadParticipantSession(sessionId: string, viewerId: string) {
+  if (!z.string().uuid().safeParse(sessionId).success) return null
+  const session = await prisma.swapSession.findUnique({
+    where: { id: sessionId },
+    include: { skill: true, learner: true, teacher: true },
+  })
+  if (!session) return null
+  if (session.learnerId !== viewerId && session.teacherId !== viewerId) return null
+  return session
+}
+
+const messageSchema = z.object({
+  sessionId: z.string().uuid(),
+  body: z.string().trim().min(1).max(1000),
+})
+
+/**
+ * Post to a session thread. Threads are the only messaging surface in the app:
+ * there are no open DMs, so nobody can be written to by a stranger who has not
+ * asked to learn from them — and blocking someone is just declining.
+ */
+export async function sendMessageAction(
+  input: z.infer<typeof messageSchema>,
+): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+  const parsed = messageSchema.safeParse(input)
+  if (!parsed.success) return fail('Write something first (1000 characters max).')
+  const data = parsed.data
+
+  const session = await loadParticipantSession(data.sessionId, user.id)
+  if (!session) return fail('Not your conversation.')
+  if (session.status === 'CANCELLED' || session.status === 'DECLINED') {
+    return fail('This session is closed — its thread is read-only now.')
+  }
+
+  // Light abuse guard, matching the request limiter: 30 messages an hour.
+  const recent = await prisma.message.count({
+    where: { senderId: user.id, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } },
+  })
+  if (recent >= 30) return fail('Slow down a little — try again in a few minutes.')
+
+  const counterpart = session.learnerId === user.id ? session.teacher : session.learner
+  await prisma.message.create({
+    data: { sessionId: data.sessionId, senderId: user.id, body: data.body },
+  })
+  await prisma.notification.create({
+    data: {
+      userId: counterpart.id,
+      kind: 'MESSAGE',
+      title: `${user.name.split(' ')[0]} sent a message`,
+      body: data.body.slice(0, 140),
+      href: `/sessions/${data.sessionId}`,
+    },
+  })
+  return { ok: true, data: undefined }
+}
+
+/** Clears the viewer's unread badge — only the other side's mail is marked. */
+export async function markMessagesReadAction(sessionId: string): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+  const session = await loadParticipantSession(sessionId, user.id)
+  if (!session) return fail('Not your conversation.')
+  await prisma.message.updateMany({
+    where: { sessionId, senderId: { not: user.id }, readAt: null },
+    data: { readAt: new Date() },
+  })
+  return { ok: true, data: undefined }
+}
+
+/* ------------------------------------------------------------------ */
+/* Rescheduling                                                        */
+/* ------------------------------------------------------------------ */
+
+const proposeSchema = z.object({
+  sessionId: z.string().uuid(),
+  at: z.date(),
+  mode: z.enum(['IN_PERSON', 'ONLINE']),
+  location: z.string().trim().max(120).nullable(),
+  meetLink: z.string().trim().max(200).nullable(),
+  note: z.string().trim().max(200).nullable(),
+})
+
+/**
+ * Put a new time to the other side. Either participant may propose, and the
+ * session keeps its agreed time until the other person says yes — so a
+ * proposal can never silently move a booking somebody is counting on.
+ */
+export async function proposeTimeAction(
+  input: z.infer<typeof proposeSchema>,
+): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+  const parsed = proposeSchema.safeParse(input)
+  if (!parsed.success) return fail('Pick a valid date and time.')
+  const data = parsed.data
+  if (data.at.getTime() < Date.now()) return fail('That time has already passed.')
+
+  const session = await loadParticipantSession(data.sessionId, user.id)
+  if (!session) return fail('Not your session to reschedule.')
+  if (session.status !== 'ACCEPTED') {
+    return fail('Only a confirmed session can be moved.')
+  }
+
+  const counterpart = session.learnerId === user.id ? session.teacher : session.learner
+  await prisma.swapSession.update({
+    where: { id: data.sessionId },
+    data: {
+      proposedAt: data.at,
+      proposedById: user.id,
+      proposedMode: data.mode,
+      proposedLocation: data.mode === 'IN_PERSON' ? data.location : null,
+      proposedMeetLink: data.mode === 'ONLINE' ? data.meetLink : null,
+      proposalNote: data.note,
+      // A moved session needs a fresh reminder for its new time.
+      reminderSentAt: null,
+    },
+  })
+  await prisma.notification.create({
+    data: {
+      userId: counterpart.id,
+      kind: 'RESCHEDULE',
+      title: `${user.name.split(' ')[0]} suggested a new time`,
+      body: `${session.skill.name} — tap to accept or keep the current slot.`,
+      href: `/sessions/${data.sessionId}`,
+    },
+  })
+  await sendEmail(
+    counterpart.email,
+    `${user.name.split(' ')[0]} suggested a new time`,
+    `<p><strong>${user.name}</strong> would like to move your ${session.skill.name} session.</p>
+     ${data.note ? `<p>&ldquo;${data.note}&rdquo;</p>` : ''}
+     <p>Open SkillSwap to accept the new time or keep the current one.</p>`,
+  )
+  return { ok: true, data: undefined }
+}
+
+export async function respondToProposalAction(
+  sessionId: string,
+  accept: boolean,
+): Promise<ActionResult> {
+  assertLive()
+  const user = await requireUser()
+  const session = await loadParticipantSession(sessionId, user.id)
+  if (!session) return fail('Not your session.')
+  if (!session.proposedAt || !session.proposedById) return fail('There is nothing to answer.')
+  // The proposer cannot rubber-stamp their own suggestion.
+  if (session.proposedById === user.id) return fail('Waiting on the other side to answer.')
+
+  const cleared = {
+    proposedAt: null,
+    proposedById: null,
+    proposedMode: null,
+    proposedLocation: null,
+    proposedMeetLink: null,
+    proposalNote: null,
+  }
+
+  await prisma.swapSession.update({
+    where: { id: sessionId },
+    data: accept
+      ? {
+          ...cleared,
+          scheduledAt: session.proposedAt,
+          mode: session.proposedMode ?? session.mode,
+          location: session.proposedLocation,
+          meetLink: session.proposedMeetLink,
+          reminderSentAt: null,
+        }
+      : cleared,
+  })
+
+  const counterpartId = session.proposedById
+  await prisma.notification.create({
+    data: {
+      userId: counterpartId,
+      kind: 'RESCHEDULE',
+      title: accept
+        ? `${user.name.split(' ')[0]} agreed to the new time`
+        : `${user.name.split(' ')[0]} kept the original time`,
+      body: `${session.skill.name} — check your sessions for the details.`,
+      href: `/sessions/${sessionId}`,
+    },
+  })
+  return { ok: true, data: undefined }
+}
+
+/* ------------------------------------------------------------------ */
 /* Favorites, notifications, sign-out                                  */
 /* ------------------------------------------------------------------ */
 
@@ -519,6 +740,7 @@ export async function deleteAccountAction(): Promise<ActionResult> {
     prisma.userSkill.deleteMany({ where: { userId: user.id } }),
     prisma.favorite.deleteMany({ where: { OR: [{ userId: user.id }, { teacherId: user.id }] } }),
     prisma.notification.deleteMany({ where: { userId: user.id } }),
+    prisma.availability.deleteMany({ where: { userId: user.id } }),
     prisma.user.update({
       where: { id: user.id },
       data: {

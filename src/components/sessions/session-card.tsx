@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarClock, ChevronRight, MapPin, Video } from 'lucide-react'
+import { CalendarClock, CalendarSync, ChevronRight, MapPin, MessageSquare, Video } from 'lucide-react'
 import type { SessionSummary } from '@/lib/types'
 import { Avatar } from '@/components/ui/avatar'
 import { StatusBadge } from '@/components/ui/badge'
@@ -9,10 +9,13 @@ import { formatSessionTime } from '@/lib/format'
 
 /** What, if anything, is waiting on the viewer for this session. */
 export function actionHint(session: SessionSummary): string | null {
+  // A time somebody is waiting on outranks everything else on this card.
+  if (session.proposal && !session.proposal.mine) return 'Answer the new time'
   if (session.status === 'REQUESTED' && session.role === 'teacher') return 'Respond to request'
   if (session.status === 'ACCEPTED' && !session.viewerConfirmed && session.counterpartConfirmed)
     return 'Confirm it happened'
   if (session.status === 'COMPLETED' && !session.viewerRated) return 'Leave a rating'
+  if (session.unreadCount > 0) return 'Unread messages'
   return null
 }
 
@@ -34,6 +37,15 @@ export function SessionCard({ session }: { session: SessionSummary }) {
             {session.role === 'teacher' ? 'Teaching' : 'Learning'} {session.skill.name}
           </p>
           <StatusBadge status={session.status} />
+          {session.unreadCount > 0 ? (
+            <span
+              className="animate-pop inline-flex items-center gap-1 rounded-chip bg-primary px-2 py-0.5 text-xs font-bold text-white"
+              aria-label={`${session.unreadCount} unread messages`}
+            >
+              <MessageSquare aria-hidden className="size-3" />
+              {session.unreadCount}
+            </span>
+          ) : null}
         </div>
         <p className="mt-0.5 truncate text-sm text-ink-soft">
           {session.role === 'teacher' ? 'for' : 'with'} {session.counterpart.name}
@@ -43,6 +55,12 @@ export function SessionCard({ session }: { session: SessionSummary }) {
             <CalendarClock aria-hidden className="size-3.5" />
             {session.scheduledAt ? formatSessionTime(session.scheduledAt) : 'Time not set'}
           </span>
+          {session.proposal ? (
+            <span className="inline-flex items-center gap-1 font-bold text-upcoming">
+              <CalendarSync aria-hidden className="size-3.5" />
+              New time suggested
+            </span>
+          ) : null}
           <span className="inline-flex items-center gap-1">
             <ModeIcon aria-hidden className="size-3.5" />
             {session.mode === 'ONLINE' ? 'Online' : session.location ?? 'In person'}

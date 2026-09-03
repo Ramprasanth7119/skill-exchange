@@ -91,6 +91,13 @@ avoidable error in this project.
 6. **Nobody teaches themselves.** Reject `learnerId === teacherId`.
 7. **Phone numbers are revealed only on an `ACCEPTED` session**, to the two
    people in it. Never include `phone` in a list or discovery payload.
+8. **Messaging is session-scoped.** There are no open DMs: every thread hangs
+   off a `SwapSession`, so nobody can be written to by a stranger who has not
+   asked to learn from them. Never add a user-to-user message route.
+9. **A time proposal never moves a booking.** `proposedAt` sits beside
+   `scheduledAt` until the *other* participant accepts; the proposer cannot
+   answer their own suggestion. A student who is asleep can never be stranded
+   at a slot they did not agree to.
 
 ## Commands
 
@@ -102,7 +109,9 @@ npm run lint
 npm run db:migrate   # prisma migrate dev
 npm run db:seed      # load the skill catalogue
 npm run db:studio
-node scripts/e2e-live.mjs <port>  # drives the full demo flow in headless Chrome
+node scripts/e2e-live.mjs <port>           # the full demo flow in headless Chrome
+node scripts/e2e-features.mjs <port>       # engagement layer + feedback wall
+node scripts/e2e-chat-schedule.mjs <port> # threads, availability, rescheduling
 ```
 
 ## Preview mode
